@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inscripción de Jugadores</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --bg-base: #0F172A;
+            --bg-primary: #1E293B;
+            --bg-secondary: #334155;
+            --text-primary: #F8FAFC;
+            --text-secondary: #94A3B8;
+            --accent-primary: #10B981;
+            --accent-hover: #059669;
+            --border-color: rgba(255, 255, 255, 0.1);
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg-base);
+            color: var(--text-primary);
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            background: var(--bg-primary);
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+            max-width: 600px;
+            width: 100%;
+            border: 1px solid var(--border-color);
+        }
+
+        h1 {
+            text-align: center;
+            color: var(--accent-primary);
+            margin-top: 0;
+            margin-bottom: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid var(--bg-secondary);
+            background: var(--bg-base);
+            color: var(--text-primary);
+            font-size: 16px;
+            box-sizing: border-box;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            border-color: var(--accent-primary);
+        }
+
+        .btn-submit {
+            width: 100%;
+            padding: 14px;
+            background: var(--accent-primary);
+            color: var(--bg-base);
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 20px;
+        }
+
+        .btn-submit:hover {
+            background: var(--accent-hover);
+            transform: translateY(-2px);
+        }
+
+        /* --- PRINT STYLES --- */
+        #print-area {
+            display: none;
+        }
+
+        @media print {
+            body {
+                background: white !important;
+                color: black !important;
+                font-family: "Times New Roman", Times, serif;
+                display: block;
+                margin: 0;
+                padding: 0;
+            }
+
+            .container {
+                display: none !important;
+            }
+
+            #print-area {
+                display: block !important;
+                width: 100%;
+                padding: 40px;
+                box-sizing: border-box;
+            }
+
+            .header-print {
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+                text-align: center;
+                margin-bottom: 40px;
+            }
+
+            .header-print img {
+                width: 80px;
+            }
+
+            .header-print .text-center {
+                flex: 1;
+                font-weight: bold;
+                font-size: 14px;
+                line-height: 1.5;
+            }
+
+            .print-title {
+                text-align: center;
+                font-weight: bold;
+                margin: 30px 0;
+                font-size: 16px;
+            }
+
+            .print-body {
+                font-size: 14px;
+                line-height: 1.8;
+                text-align: justify;
+            }
+
+            .field-line {
+                border-bottom: 1px solid black;
+                display: inline-block;
+                min-width: 100px;
+                text-align: center;
+                font-weight: bold;
+                padding: 0 10px;
+                color: red !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .field-line.black {
+                color: black !important;
+            }
+
+            .form-row-print {
+                margin: 15px 0;
+                display: flex;
+                align-items: flex-end;
+            }
+
+            .form-row-print .label {
+                margin-right: 10px;
+                white-space: nowrap;
+            }
+
+            .form-row-print .line {
+                flex: 1;
+                border-bottom: 1px solid black;
+                font-weight: bold;
+                padding-left: 10px;
+            }
+
+            .signatures {
+                margin-top: 80px;
+                display: flex;
+                justify-content: space-around;
+                text-align: center;
+            }
+
+            .signature-box {
+                width: 250px;
+            }
+
+            .signature-line {
+                border-bottom: 1px solid black;
+                margin-bottom: 10px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <h1>Inscripción de Jugador</h1>
+        <p style="text-align:center; color: var(--text-secondary); margin-bottom: 30px;">
+            Completa los datos del jugador para generar automáticamente la carta de inscripción lista para imprimir.
+        </p>
+
+        <form id="form-inscripcion">
+            <div class="form-group">
+                <label>Equipo</label>
+                <select id="input-equipo" required>
+                    <option value="">Cargando equipos...</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Nombres y Apellidos</label>
+                <input type="text" id="input-nombres" required placeholder="Ej. Juan Pablo Perez Lopez">
+            </div>
+            <div class="form-group">
+                <label>Número de Cédula</label>
+                <input type="text" id="input-cedula" required placeholder="000-000000-0000X">
+            </div>
+            <div class="form-group">
+                <label>Municipio de procedencia</label>
+                <input type="text" id="input-municipio" required placeholder="Ej. Palacagüina">
+            </div>
+            <div class="form-group">
+                <label>Dirección</label>
+                <input type="text" id="input-direccion" required placeholder="Barrio / Comunidad">
+            </div>
+
+            <button type="submit" class="btn-submit"><i class="fa-solid fa-file-pdf"></i> Generar Carta</button>
+        </form>
+    </div>
+
+    <div id="print-area">
+        <div class="header-print">
+            <div id="logo-left" style="width: 80px; height: 80px; border: 1px solid #ccc; display: flex; align-items: center; justify-content: center;">LOGO</div>
+            <div class="text-center">
+                <span id="print-header-torneo">CAMPEONATO CATEGORIA LIBRE</span> <br><span id="print-header-dedicatoria">"RAMON ERNESTO ARTEAGA MATUTE Y ALBIN ALBERTO MATUTE IGLESIA"</span><br>
+                <span id="print-header-year">2025</span>
+            </div>
+            <div id="logo-right" style="width: 80px; height: 80px; border: 1px solid #ccc; display: flex; align-items: center; justify-content: center;">LOGO</div>
+        </div>
+
+        <div class="print-title">CARTA INSCRIPCION DE JUGADORES</div>
+
+        <div class="print-body">
+            <p>
+                El Equipo: <span class="field-line" id="print-equipo"></span> hacemos formante la solicitud a la
+                federación para la inscripción del jugador con los siguientes datos:
+            </p>
+
+            <div class="form-row-print">
+                <span class="label">Nombres y Apellidos:</span>
+                <span class="line black" id="print-nombres"></span>
+            </div>
+            <div class="form-row-print">
+                <span class="label">Numero de Cedula:</span>
+                <span class="line black" id="print-cedula"></span>
+            </div>
+            <div class="form-row-print">
+                <span class="label">Municipio de procedencia:</span>
+                <span class="line black" id="print-municipio"></span>
+            </div>
+            <div class="form-row-print">
+                <span class="label">Dirección:</span>
+                <span class="line black" id="print-direccion"></span>
+            </div>
+
+            <p style="margin-top: 30px;">
+                Dicho jugador se compromete a cumplir con el reglamento que rige la liga municipal de Palacagüina,
+                respetando a compañeros de equipos, jugadores de otros equipos y miembros técnicos y miembros de la
+                federación.
+            </p>
+
+            <p style="text-align: center; margin-top: 40px;">
+                Palacagüina <span class="field-line black" id="print-dia" style="min-width: 40px;"></span> de <span
+                    class="field-line black" id="print-mes" style="min-width: 100px;"></span> del 20<span
+                    class="field-line black" id="print-anio" style="min-width: 40px;"></span>
+            </p>
+        </div>
+
+        <div class="signatures">
+            <div class="signature-box">
+                <div class="signature-line"></div>
+                Representante del Equipo
+            </div>
+            <div class="signature-box">
+                <div class="signature-line"></div>
+                jugador
+            </div>
+        </div>
+    </div>
+
+    <!-- Cargar Supabase UMD -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/db.js"></script>
+    <script src="js/inscripcion.js"></script>
+</body>
+
+</html>

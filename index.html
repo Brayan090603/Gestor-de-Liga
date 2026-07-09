@@ -1,0 +1,971 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FEMFUTPAL - Gestión de Liga</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="logo-container">
+                <i id="liga-logo-icon" class="fa-solid fa-futbol logo-icon"></i>
+                <img id="liga-logo-img" src="" style="display:none; width:80px; height:80px; border-radius:50%; margin-bottom:10px; object-fit:cover; border:2px solid var(--accent-primary); box-shadow: var(--shadow-neon);">
+                <h1 id="liga-name-title">FEMFUTPAL</h1>
+                <p id="liga-lugar-subtitle" class="subtitle">LIGA PALACAGÜINA</p>
+            </div>
+            
+            <nav class="main-nav">
+                <p class="nav-section-title">GESTIÓN</p>
+                <a href="#" class="nav-item active" data-view="inicio" data-tab="inicio">
+                    <i class="fa-solid fa-house"></i> Inicio
+                </a>
+                <a href="#" class="nav-item" data-view="equipos" data-tab="equipos">
+                    <i class="fa-solid fa-shield-halved"></i> Equipos
+                </a>
+                <a href="#" class="nav-item" data-view="mercado" data-tab="mercado">
+                    <i class="fa-solid fa-right-left"></i> Mercado (Altas/Bajas)
+                </a>
+                <a href="#" class="nav-item" data-view="sorteos" data-tab="sorteos">
+                    <i class="fa-solid fa-shuffle"></i> Sorteos / Partidos
+                </a>
+                <div class="nav-item-group" style="margin-bottom: 5px;">
+                    <div class="nav-item nav-item-dropdown" id="nav-inscripcion-toggle" style="display: flex; align-items: center; justify-content: space-between;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <i class="fa-solid fa-file-signature"></i> 
+                            <span>Form. Inscripción</span>
+                        </div>
+                        <i class="fa-solid fa-chevron-down" style="font-size: 12px; transition: transform 0.3s;"></i>
+                    </div>
+                    <div class="nav-submenu" id="nav-inscripcion-submenu" style="display: none; flex-direction: column; padding-left: 35px; margin-top: 5px; gap: 5px;">
+                        <a href="inscripcion.html" target="_blank" class="nav-submenu-item external" style="color: var(--text-secondary); text-decoration: none; font-size: 14px; padding: 8px 10px; border-radius: 8px; transition: all 0.3s; display: flex; align-items: center; gap: 10px;">
+                            <i class="fa-solid fa-file-pdf"></i> Hacer Carta
+                        </a>
+                        <a href="#" class="nav-submenu-item external" id="btn-copiar-enlace" style="color: var(--text-secondary); text-decoration: none; font-size: 14px; padding: 8px 10px; border-radius: 8px; transition: all 0.3s; display: flex; align-items: center; gap: 10px;">
+                            <i class="fa-solid fa-copy"></i> Copiar Enlace
+                        </a>
+                    </div>
+                </div>
+                
+                <p class="nav-section-title" style="margin-top: 15px;">COMPETICIÓN</p>
+                <a href="#" class="nav-item" data-view="posiciones" data-tab="posiciones">
+                    <i class="fa-solid fa-list-ol" style="color: var(--accent-primary);"></i> Tabla de Posiciones
+                </a>
+
+                <p class="nav-section-title" style="margin-top: 15px;">ESTADÍSTICAS</p>
+                <a href="#" class="nav-item" data-view="stats" data-tab="goleadores">
+                    <i class="fa-solid fa-shoe-prints"></i> Goleadores
+                </a>
+                <a href="#" class="nav-item" data-view="stats" data-tab="amarillas">
+                    <i class="fa-solid fa-square" style="color: #FCD34D;"></i> Tarjetas Amarillas
+                </a>
+                <a href="#" class="nav-item" data-view="stats" data-tab="rojas">
+                    <i class="fa-solid fa-square" style="color: #F87171;"></i> Tarjetas Rojas
+                </a>
+                <a href="#" class="nav-item" data-view="stats" data-tab="novatos">
+                    <i class="fa-solid fa-seedling"></i> Novatos
+                </a>
+                <a href="#" class="nav-item" data-view="stats" data-tab="porteros">
+                    <i class="fa-solid fa-hands-bubbles"></i> Porteros
+                </a>
+
+                <hr style="border-color: rgba(255,255,255,0.1); margin: 10px 20px;">
+                <a href="#" class="nav-item" id="btn-open-admin">
+                    <i class="fa-solid fa-gear"></i> Administración
+                </a>
+            </nav>
+            
+            <div style="padding: 20px; border-top: 1px solid var(--border-color); margin-top: auto;">
+                <a href="bienvenida.html" class="nav-item" style="color: var(--accent-primary); border-radius: var(--radius-md); border: 1px solid var(--accent-primary); justify-content: center;">
+                    <i class="fa-solid fa-arrow-left"></i> Volver al Menú
+                </a>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            
+            <!-- Portada Banner -->
+            <div id="liga-portada-banner" style="display:none; width:100%; min-height:180px; background-size:cover; background-position:center; border-bottom:1px solid var(--border-color); position:relative;">
+                <div style="position:absolute; bottom:0; left:0; width:100%; height:50%; background:linear-gradient(to top, var(--bg-primary), transparent);"></div>
+            </div>
+
+            <!-- Header -->
+            <header class="top-header">
+                <div class="header-title">
+                    <h2 id="current-tab-title">Equipos de la Liga</h2>
+                    <p class="date-text">Temporada <span id="season-label">2026</span></p>
+                </div>
+                
+                <!-- Right Side Actions & Profile -->
+                <div style="display:flex; align-items:center; gap:30px;">
+                    <!-- Tournament Selector -->
+                    <div class="header-actions" style="display:flex; align-items:center; gap:20px;">
+                        <div id="liga-contact-info" style="display:none; text-align:right; margin-right:15px; font-size:12px; color:var(--text-secondary);">
+                            <p style="margin-bottom:3px;"><i class="fa-solid fa-map-location-dot"></i> <span id="liga-campo-text"></span></p>
+                            <p><i class="fa-solid fa-phone"></i> <span id="liga-celular-text"></span></p>
+                        </div>
+
+                        <div class="tournament-selector" style="display: flex; background-color: rgba(0,0,0,0.2); border-radius: var(--radius-full); padding: 4px; border: 1px solid var(--border-color);">
+                            <button class="tournament-btn active" data-torneo="apertura">Apertura</button>
+                            <button class="tournament-btn" data-torneo="clausura">Clausura</button>
+                        </div>
+                        <button class="btn-primary" id="btn-finish-apertura" style="background: linear-gradient(135deg, #EF4444, #DC2626); box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4); width: auto; font-size: 13px; padding: 8px 16px;"><i class="fa-solid fa-flag-checkered"></i> Finalizar Apertura</button>
+                    </div>
+
+                    <div class="user-profile">
+                        <div class="avatar"><i class="fa-solid fa-user"></i></div>
+                        <span>Admin</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Dashboard Area -->
+            <div class="dashboard-area">
+                <!-- Banner de Torneo Finalizado -->
+                <div id="finished-tournament-banner" class="finished-banner">
+                    <i class="fa-solid fa-lock"></i>
+                    <div class="finished-banner-content">
+                        <h4 id="finished-banner-title" class="finished-banner-title"></h4>
+                        <p id="finished-banner-desc" class="finished-banner-desc"></p>
+                    </div>
+                </div>
+                <!-- VIEW: INICIO (Dashboard) -->
+                <div id="view-inicio" class="view-section active" style="padding-top: 0;">
+                    <div class="inicio-header">
+                        <div class="inicio-cover" id="inicio-cover-img" style="background-image: url('');">
+                            <div class="inicio-cover-overlay"></div>
+                        </div>
+                        <div class="inicio-header-content">
+                            <img id="inicio-logo-img" src="" alt="Logo Liga" class="inicio-logo">
+                            <h2 id="inicio-title">FEDERACIÓN MUNICIPAL DE FÚTBOL FEMFUTPAL</h2>
+                            <p class="inicio-dedicatoria" id="inicio-dedicatoria-text" style="color: var(--accent-primary); font-size: 14px; margin-top: 5px; font-weight: 500; letter-spacing: 0.5px;"></p>
+                            <p class="inicio-slogan" id="inicio-slogan-text">"LOS PUNTOS DEFINEN, EL ESFUERZO CORONA."</p>
+                        </div>
+                    </div>
+
+                    <div class="inicio-body">
+                        <div class="inicio-card dates-card">
+                            <i class="fa-regular fa-calendar-days text-primary"></i>
+                            <span id="inicio-dates-text">domingo, 5 de abril de 2026 - domingo, 1 de marzo de 2026</span>
+                        </div>
+
+                        <div class="inicio-card info-card">
+                            <div class="info-row">
+                                <i class="fa-solid fa-user text-muted"></i>
+                                <span>ORGANIZADOR: <strong id="inicio-organizer" class="text-primary">ADMINISTRACIÓN</strong></span>
+                            </div>
+                            <div class="info-row">
+                                <i class="fa-solid fa-globe text-muted"></i>
+                                <span>Sitio web del campeonato <i class="fa-solid fa-arrow-up-right-from-square small-icon"></i></span>
+                            </div>
+                            <div class="info-row">
+                                <i class="fa-solid fa-envelope text-muted"></i>
+                                <span id="inicio-email">contacto@femfutpal.com</span>
+                            </div>
+                            <div class="info-row">
+                                <i class="fa-solid fa-phone text-muted"></i>
+                                <span id="inicio-phone1">---</span>
+                            </div>
+                            <div class="info-row">
+                                <i class="fa-solid fa-phone text-muted"></i>
+                                <span id="inicio-phone2">---</span>
+                            </div>
+                        </div>
+
+                        <div class="inicio-section">
+                            <h3 class="inicio-section-title text-primary">Resultado del campeonato</h3>
+                            <div class="podium-container" id="inicio-podium">
+                                <!-- 2nd Place -->
+                                <div class="podium-item place-2">
+                                    <span class="podium-badge">2º Puesto</span>
+                                    <div class="podium-circle silver">
+                                        <i class="fa-solid fa-trophy"></i>
+                                    </div>
+                                    <span class="podium-team-name" id="podium-name-2">---</span>
+                                </div>
+                                <!-- 1st Place -->
+                                <div class="podium-item place-1">
+                                    <span class="podium-badge">1º Puesto</span>
+                                    <div class="podium-circle gold">
+                                        <img id="podium-img-1" src="" style="display:none; width:100%; height:100%; border-radius:50%; object-fit:cover;">
+                                        <i class="fa-solid fa-trophy" id="podium-icon-1"></i>
+                                    </div>
+                                    <span class="podium-team-name" id="podium-name-1">---</span>
+                                </div>
+                                <!-- 3rd Place -->
+                                <div class="podium-item place-3">
+                                    <span class="podium-badge">3º Puesto</span>
+                                    <div class="podium-circle bronze">
+                                        <i class="fa-solid fa-trophy"></i>
+                                    </div>
+                                    <span class="podium-team-name" id="podium-name-3">---</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="inicio-section">
+                            <h3 class="inicio-section-title text-primary">Premios</h3>
+                            <div class="premios-list">
+                                <div class="premio-item">
+                                    <div class="premio-title"><i class="fa-solid fa-trophy text-primary"></i> Campeón</div>
+                                    <div class="premio-value" id="premio-campeon">---</div>
+                                </div>
+                                <div class="premio-item">
+                                    <div class="premio-title"><i class="fa-solid fa-trophy text-primary"></i> 2º Puesto</div>
+                                    <div class="premio-value" id="premio-subcampeon">---</div>
+                                </div>
+                                <div class="premio-item">
+                                    <div class="premio-title"><i class="fa-solid fa-trophy text-primary"></i> 3º Puesto</div>
+                                    <div class="premio-value" id="premio-tercero">---</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- VIEW: EQUIPOS -->
+                <div id="view-equipos" class="view-section">
+                    <div class="teams-grid" id="teams-container">
+                        <!-- Equipos renderizados via JS -->
+                    </div>
+                </div>
+
+                <!-- VIEW: DETALLE EQUIPO (Plantilla) -->
+                <div id="view-equipo-detalle" class="view-section">
+                    <div class="team-detail-banner" style="position: relative; height: 200px; border-radius: 12px; margin-bottom: 60px; background: linear-gradient(135deg, var(--bg-primary), var(--bg-secondary)); background-size: cover; background-position: center; border: 1px solid var(--border-color);" id="detail-team-banner">
+                        <input type="file" id="upload-portada" style="display:none;" accept="image/*">
+                        <button class="btn-action" style="position: absolute; top: 15px; right: 15px; background: rgba(0,0,0,0.5); color: white;" onclick="document.getElementById('upload-portada').click()" title="Cambiar Portada"><i class="fa-solid fa-camera"></i></button>
+                        
+                        <button class="btn-back" id="btn-back-equipos" style="position: absolute; top: 15px; left: 15px; background: rgba(0,0,0,0.5); color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer;"><i class="fa-solid fa-arrow-left"></i> Volver</button>
+                        
+                        <div style="position: absolute; bottom: -50px; left: 30px; display: flex; align-items: flex-end; gap: 20px;">
+                            <div style="position: relative;">
+                                <div id="detail-team-logo-fallback" style="width: 100px; height: 100px; border-radius: 50%; border: 4px solid var(--bg-base); background: var(--bg-secondary); display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(0,0,0,0.2);">
+                                    <i class="fa-solid fa-shield-halved" style="font-size: 40px; color: var(--accent-primary);"></i>
+                                </div>
+                                <img id="detail-team-logo" src="" alt="Logo" style="width: 100px; height: 100px; border-radius: 50%; object-fit: cover; border: 4px solid var(--bg-base); background: var(--bg-primary); box-shadow: 0 4px 10px rgba(0,0,0,0.2); display: none;">
+                                <input type="file" id="upload-logo" style="display:none;" accept="image/*">
+                                <button class="btn-action" style="position: absolute; bottom: 0; right: 0; background: var(--accent-primary); color: var(--bg-base); width: 30px; height: 30px; border-radius: 50%; padding: 0; display: flex; align-items: center; justify-content: center; z-index: 2;" onclick="document.getElementById('upload-logo').click()" title="Cambiar Logo"><i class="fa-solid fa-camera" style="font-size:12px;"></i></button>
+                            </div>
+                            <div style="margin-bottom: 10px;">
+                                <h2 id="detail-team-name" style="font-size: 28px; text-shadow: 0 2px 4px rgba(0,0,0,0.5);">Nombre Equipo</h2>
+                            </div>
+                        </div>
+                        
+                        <button class="btn-primary" id="btn-inline-add-player" style="position: absolute; bottom: -45px; right: 15px; width: auto; box-shadow: 0 4px 10px rgba(16,185,129,0.3);"><i class="fa-solid fa-plus"></i> Añadir Jugador</button>
+                    </div>
+                    <section class="table-section">
+                        <div class="table-header">
+                            <h3>Plantilla Actual</h3>
+                        </div>
+                        <div class="table-container">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Jugador</th>
+                                        <th>Rol</th>
+                                        <th>Estado</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="roster-body">
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                    
+                    <!-- Historial del Club -->
+                    <div class="market-grid" style="margin-top: 30px;">
+                        <section class="table-section">
+                            <div class="table-header">
+                                <h3 style="color: var(--accent-primary)"><i class="fa-solid fa-arrow-trend-up"></i> Fichajes del Club</h3>
+                            </div>
+                            <div class="table-container">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Fecha</th>
+                                            <th>Jugador</th>
+                                            <th>Detalle</th>
+                                            <th>Acción</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="team-altas-body"></tbody>
+                                </table>
+                            </div>
+                        </section>
+                        
+                        <section class="table-section">
+                            <div class="table-header">
+                                <h3 style="color: #F87171"><i class="fa-solid fa-arrow-trend-down"></i> Bajas del Club</h3>
+                            </div>
+                            <div class="table-container">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Fecha</th>
+                                            <th>Jugador</th>
+                                            <th>Salió hacia</th>
+                                            <th>Acción</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="team-bajas-body"></tbody>
+                                </table>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+
+                <!-- VIEW: MERCADO (Altas y Bajas GLOBAL) -->
+                <div id="view-mercado" class="view-section">
+                    <div class="market-grid">
+                        <section class="table-section">
+                            <div class="table-header" style="border-bottom: 1px solid rgba(16,185,129,0.2);">
+                                <h3 style="color: var(--accent-primary); display: flex; align-items: center; gap: 10px;"><i class="fa-solid fa-arrow-trend-up"></i> Altas y Traspasos</h3>
+                            </div>
+                            <div class="feed-container" id="altas-body" style="padding: 15px; display: flex; flex-direction: column; gap: 12px; max-height: 500px; overflow-y: auto;">
+                                <!-- Feed items will be injected here -->
+                            </div>
+                        </section>
+                        
+                        <section class="table-section">
+                            <div class="table-header" style="border-bottom: 1px solid rgba(248,113,113,0.2);">
+                                <h3 style="color: #F87171; display: flex; align-items: center; gap: 10px;"><i class="fa-solid fa-arrow-trend-down"></i> Bajas Oficiales</h3>
+                            </div>
+                            <div class="feed-container" id="bajas-body" style="padding: 15px; display: flex; flex-direction: column; gap: 12px; max-height: 500px; overflow-y: auto;">
+                                <!-- Feed items will be injected here -->
+                            </div>
+                        </section>
+                    </div>
+                </div>
+
+                <!-- VIEW: SORTEOS -->
+                <div id="view-sorteos" class="view-section">
+                    <div class="market-grid">
+                        <section class="table-section" style="flex: 1;">
+                            <div class="table-header">
+                                <h3 style="color: var(--accent-primary)"><i class="fa-solid fa-gear"></i> Opciones del Sorteo</h3>
+                            </div>
+                            <div class="table-container" style="padding: 20px;">
+                                <form id="form-generar-sorteo">
+                                    <div class="form-group">
+                                        <label>Tipo de Fase</label>
+                                        <select id="sorteo-fase" class="form-control" required>
+                                            <option value="liga">Liga (Todos contra Todos)</option>
+                                            <option value="grupos">Fase de Grupos</option>
+                                            <option value="eliminatorias">Fases Eliminatorias (Emparejamiento Directo)</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group" id="grupo-num-container" style="display: none;">
+                                        <label>Cantidad de Grupos</label>
+                                        <input type="number" id="sorteo-grupos-num" class="form-control" min="2" max="8" value="2">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Formato de Partido</label>
+                                        <select id="sorteo-formato" class="form-control" required>
+                                            <option value="ida">Solo Ida</option>
+                                            <option value="idayvuelta">Ida y Vuelta</option>
+                                        </select>
+                                    </div>
+                                    <button type="submit" class="btn-primary" style="width: 100%; margin-top: 15px;"><i class="fa-solid fa-wand-magic-sparkles"></i> Generar Partidos Aleatoriamente</button>
+                                </form>
+                            </div>
+                        </section>
+                    </div>
+
+                    <section class="table-section" style="margin-top: 24px;" id="sorteo-resultados-section">
+                        <div class="table-header">
+                            <h3><i class="fa-solid fa-calendar-days"></i> Partidos Generados</h3>
+                        </div>
+                        <div class="table-container" style="padding: 20px; background: rgba(0,0,0,0.1);">
+                            <div id="sorteo-resultados-container" style="display: grid; gap: 15px;">
+                                <p style="text-align:center; color: var(--text-muted); font-size: 14px;">Utiliza el panel superior para generar los partidos.</p>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- VIEW: TABLA POSICIONES -->
+                <div id="view-posiciones" class="view-section">
+                    <section class="table-section" style="margin-top: 0;">
+                        <div class="table-header">
+                            <h3><i class="fa-solid fa-list-ol"></i> Tabla de Posiciones Generales</h3>
+                        </div>
+                        <div class="table-container">
+                            <div id="posiciones-container" style="padding: 20px; display: flex; flex-direction: column; gap: 30px;">
+                                <p style="text-align:center; color: var(--text-muted); font-size: 14px;">Genera un calendario de Liga o Grupos y anota resultados para ver la tabla.</p>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- VIEW: STATS -->
+                <div id="view-stats" class="view-section">
+                    <div class="stat-cards">
+                        <div class="card premium-card">
+                            <div class="card-icon"><i class="fa-solid fa-trophy"></i></div>
+                            <div class="card-info">
+                                <h3>Líder Actual</h3>
+                                <p class="highlight" id="top-player-name">N/A</p>
+                                <span class="stat-value" id="top-player-stat">0</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <section class="table-section" style="margin-top: 24px;">
+                        <div class="table-header">
+                            <h3>Clasificación Detallada</h3>
+                        </div>
+                        <div class="table-container">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Pos</th>
+                                        <th>Jugador</th>
+                                        <th>Equipo</th>
+                                        <th id="stat-column-header">Stat</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="table-body">
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- Admin Modal -->
+    <div class="modal-overlay" id="admin-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Panel de Administración</h2>
+                <button class="close-btn" id="btn-close-admin"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            
+            <div class="modal-body admin-tabs-container">
+                <div class="admin-tabs">
+                    <button class="admin-tab active" data-target="admin-equipo">Equipo</button>
+                    <button class="admin-tab" data-target="admin-estadistica">Estadísticas</button>
+                    <button class="admin-tab" data-target="admin-mercado">Mercado</button>
+                    <button class="admin-tab" data-target="admin-liga">Datos de la Liga</button>
+                </div>
+
+                <!-- Datos de la Liga -->
+                <div id="admin-liga" class="admin-section-content">
+                    <h3>Actualizar Datos de la Liga</h3>
+                    <form id="form-update-liga">
+                        <div class="form-group">
+                            <label>Dedicatoria del Campeonato</label>
+                            <input type="text" id="liga-dedicatoria" placeholder="Ej: RAMON ERNESTO ARTEAGA MATUTE Y ALBIN ALBERTO MATUTE IGLESIA">
+                        </div>
+                        <div class="form-group">
+                            <label>Eslogan / Lema</label>
+                            <input type="text" id="liga-eslogan" placeholder="Ej: Los puntos definen, el esfuerzo corona">
+                        </div>
+                        <div class="form-group">
+                            <label>Correo Electrónico (Opcional)</label>
+                            <input type="email" id="liga-correo" placeholder="correo@ejemplo.com">
+                        </div>
+                        <div class="form-group">
+                            <label>Sitio Web / Facebook (Opcional)</label>
+                            <input type="text" id="liga-web" placeholder="https://...">
+                        </div>
+                        <div class="form-group" style="display: flex; gap: 10px;">
+                            <div style="flex:1;">
+                                <label>Fecha de Inicio (Opcional)</label>
+                                <input type="date" id="liga-fecha-inicio">
+                            </div>
+                            <div style="flex:1;">
+                                <label>Fecha Final (Opcional)</label>
+                                <input type="date" id="liga-fecha-fin">
+                            </div>
+                        </div>
+                        <button type="submit" class="btn-primary" style="margin-top: 10px;">Guardar Datos</button>
+                    </form>
+                </div>
+
+                <!-- Crear Equipo -->
+                <div id="admin-equipo" class="admin-section-content active">
+                    <h3>Registrar Nuevo Equipo</h3>
+                    <form id="form-new-team">
+                        <div class="form-group">
+                            <label>Nombre del Equipo</label>
+                            <input type="text" id="new-team-name" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Logo del Equipo (Opcional)</label>
+                            <input type="file" id="new-team-logo" accept="image/*">
+                            <small style="color: var(--text-muted)">Se comprimirá automáticamente.</small>
+                        </div>
+                        <button type="submit" class="btn-primary">Guardar Equipo</button>
+                    </form>
+                </div>
+
+                <!-- Añadir Estadística -->
+                <div id="admin-estadistica" class="admin-section-content">
+                    <h3>Registrar Estadística</h3>
+                    <form id="form-add-stat">
+                        <div class="form-group">
+                            <label>Seleccionar Jugador</label>
+                            <select id="select-player-stat" required></select>
+                        </div>
+                        <div class="form-group">
+                            <label>Tipo de Estadística</label>
+                            <select id="select-stat-type" required>
+                                <option value="goles">+1 Gol Anotado</option>
+                                <option value="amarillas">+1 Tarjeta Amarilla</option>
+                                <option value="rojas">+1 Tarjeta Roja</option>
+                                <option value="golesRecibidos">+1 Gol Recibido (Porteros)</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn-secondary">Añadir Estadística</button>
+                    </form>
+                </div>
+
+                <!-- Mercado (Traspasos y Bajas) -->
+                <div id="admin-mercado" class="admin-section-content">
+                    <h3>Traspasos y Bajas</h3>
+                    
+                    <form id="form-transfer" style="margin-bottom: 20px; border-bottom: 1px dashed var(--border-color); padding-bottom: 20px;">
+                        <h4>Realizar Traspaso</h4>
+                        <div class="form-group">
+                            <label>Jugador</label>
+                            <select id="select-player-transfer" required></select>
+                        </div>
+                        <div class="form-group">
+                            <label>Nuevo Equipo</label>
+                            <select id="select-team-transfer" required></select>
+                        </div>
+                        <button type="submit" class="btn-secondary">Efectuar Traspaso</button>
+                    </form>
+
+                    <form id="form-baja">
+                        <h4>Dar de Baja</h4>
+                        <div class="form-group">
+                            <label>Jugador</label>
+                            <select id="select-player-baja" required></select>
+                        </div>
+                        <button type="submit" class="btn-danger" style="background-color: #EF4444; color: white; padding: 12px 20px; border: none; border-radius: 8px; width: 100%; cursor: pointer;">Dar de Baja</button>
+                    </form>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Inline Edit Modal -->
+    <div class="modal-overlay" id="add-player-modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2>Registrar Nuevo Jugador</h2>
+                <button class="close-btn" id="btn-close-add-player"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <form id="form-new-player">
+                    <div class="player-form-grid">
+                        <div class="photo-upload-section">
+                            <label>Foto (Opcional)</label>
+                            <div class="photo-upload-container">
+                                <input type="file" id="new-player-photo" accept="image/*" class="photo-upload-input">
+                                <div class="photo-upload-label" id="new-player-photo-label">
+                                    <i class="fa-solid fa-camera"></i>
+                                    <span>Subir Foto</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="player-info-section">
+                            <div class="form-group">
+                                <label>Nombre del Jugador</label>
+                                <input type="text" id="new-player-name" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Equipo</label>
+                                <input type="text" id="new-player-team-name" readonly style="background-color: var(--card-bg); cursor: not-allowed; border: 1px solid var(--border-color); opacity: 0.8;" required>
+                                <input type="hidden" id="new-player-team">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-row pills-group">
+                        <label class="pill-checkbox"><input type="checkbox" id="new-player-novato"> <span class="pill-label">Es Novato</span></label>
+                        <label class="pill-checkbox"><input type="checkbox" id="new-player-portero"> <span class="pill-label">Es Portero</span></label>
+                    </div>
+                    <div class="form-row" style="margin-top:10px; background:rgba(16,185,129,0.1); padding:10px; border-radius:var(--radius-md); border:1px solid rgba(16,185,129,0.3);">
+                        <label style="color:var(--accent-primary); cursor:pointer; width:100%;">
+                            <input type="checkbox" id="new-player-mercado"> Registrar como Fichaje Oficial (Anunciar en Mercado)
+                        </label>
+                    </div>
+                    <button type="submit" class="btn-primary" style="margin-top: 15px;"><i class="fa-solid fa-user-plus"></i> Registrar Jugador</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Inline Edit Modal -->
+    <div class="modal-overlay" id="inline-edit-modal">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h2>Editar Jugador</h2>
+                <button class="close-btn" id="btn-close-inline-edit"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <form id="form-inline-edit">
+                    <input type="hidden" id="edit-player-id">
+                    <div style="display: flex; justify-content: center; margin-bottom: 20px;">
+                        <div style="position: relative;">
+                            <img id="edit-player-photo-preview" src="" alt="Foto" style="width: 100px; height: 100px; border-radius: 50%; object-fit: cover; border: 3px solid var(--bg-base); background: var(--bg-secondary); display: none;">
+                            <div id="edit-player-photo-fallback" style="width: 100px; height: 100px; border-radius: 50%; border: 3px solid var(--bg-base); background: var(--bg-secondary); display: flex; align-items: center; justify-content: center;">
+                                <i class="fa-solid fa-user" style="font-size: 40px; color: var(--text-secondary);"></i>
+                            </div>
+                            <input type="file" id="edit-player-photo-input" style="display:none;" accept="image/*">
+                            <button type="button" class="btn-action" style="position: absolute; bottom: 0; right: 0; background: var(--accent-primary); color: var(--bg-base); width: 30px; height: 30px; border-radius: 50%; padding: 0; display: flex; align-items: center; justify-content: center;" onclick="document.getElementById('edit-player-photo-input').click()" title="Cambiar Foto"><i class="fa-solid fa-camera" style="font-size:12px;"></i></button>
+                        </div>
+                    </div>
+                    <div class="form-group" style="display: flex; gap: 10px;">
+                        <div style="flex: 1;">
+                            <label>Nombre del Jugador</label>
+                            <input type="text" id="edit-player-name" required>
+                        </div>
+                        <div style="width: 80px;">
+                            <label>Dorsal</label>
+                            <input type="number" id="edit-player-dorsal" min="1" max="99" placeholder="#">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <label><input type="checkbox" id="edit-player-novato"> Es Novato</label>
+                        <label><input type="checkbox" id="edit-player-portero"> Es Portero</label>
+                    </div>
+                    <button type="submit" class="btn-primary">Guardar Cambios</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Inline Transfer Modal -->
+    <div class="modal-overlay" id="inline-transfer-modal">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h2>Traspasar Jugador</h2>
+                <button class="close-btn" id="btn-close-inline-transfer"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <form id="form-inline-transfer">
+                    <input type="hidden" id="transfer-player-id">
+                    <p style="margin-bottom: 15px; color: var(--text-secondary); font-size: 14px;">Estás traspasando a <strong id="transfer-player-name" style="color:var(--text-primary)"></strong>.</p>
+                    <div class="form-group">
+                        <label>Nuevo Equipo</label>
+                        <select id="inline-select-team-transfer" required></select>
+                    </div>
+                    <p style="font-size: 12px; color: #FCD34D; margin-bottom: 15px;"><i class="fa-solid fa-triangle-exclamation"></i> Recuerda: Solo se permite 1 traspaso por jugador durante todo el año.</p>
+                    <button type="submit" class="btn-secondary">Efectuar Traspaso</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Opciones de Fecha -->
+    <div class="modal-overlay" id="modal-opciones-fecha">
+        <div class="modal-content options-modal">
+            <div class="modal-header">
+                <h2>Opciones de Fecha</h2>
+                <button class="close-btn" id="btn-close-opciones-fecha"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="options-grid">
+                    <div class="option-item" onclick="alert('Próximamente: Agregar fecha')">
+                        <div class="option-circle opt-blue">
+                            <i class="fa-solid fa-calendar-plus"></i>
+                        </div>
+                        <span>Agregar fecha</span>
+                    </div>
+                    <div class="option-item" onclick="alert('Próximamente: Agregar partido')">
+                        <div class="option-circle opt-orange">
+                            <i class="fa-solid fa-futbol"></i>
+                        </div>
+                        <span>Agregar partido</span>
+                    </div>
+                    <div class="option-item" onclick="alert('Próximamente: Editar Fecha')">
+                        <div class="option-circle opt-purple">
+                            <i class="fa-solid fa-pencil"></i>
+                        </div>
+                        <span>Editar Fecha</span>
+                    </div>
+                    <div class="option-item" onclick="alert('Próximamente: Reordenar rondas')">
+                        <div class="option-circle opt-green">
+                            <i class="fa-solid fa-arrow-down-up-across-line"></i>
+                        </div>
+                        <span>Reordenar rondas</span>
+                    </div>
+                    <div class="option-item" id="btn-abrir-exportar">
+                        <div class="option-circle opt-yellow">
+                            <i class="fa-solid fa-download"></i>
+                        </div>
+                        <span>Exportar</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Exportar -->
+    <div class="modal-overlay" id="modal-exportar">
+        <div class="modal-content options-modal">
+            <div class="modal-header">
+                <h2>Opciones de Exportación</h2>
+                <button class="close-btn" id="btn-close-exportar"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="options-grid">
+                    <div class="option-item" id="btn-export-pdf">
+                        <div class="option-circle opt-red" style="background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);">
+                            <i class="fa-solid fa-file-pdf"></i>
+                        </div>
+                        <span>Exportar PDF</span>
+                    </div>
+                    <div class="option-item" id="btn-export-img">
+                        <div class="option-circle opt-pink" style="background: linear-gradient(135deg, #ec4899 0%, #be185d 100%);">
+                            <i class="fa-solid fa-image"></i>
+                        </div>
+                        <span>Como Imagen</span>
+                    </div>
+                    <div class="option-item" id="btn-export-csv">
+                        <div class="option-circle opt-teal" style="background: linear-gradient(135deg, #14b8a6 0%, #0f766e 100%);">
+                            <i class="fa-solid fa-file-excel"></i>
+                        </div>
+                        <span>Exportar Excel</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Match Dashboard (Live Tracker) -->
+    <div class="modal-overlay" id="modal-match-dashboard">
+        <div class="modal-content match-dashboard-modal" id="match-dashboard-content">
+            <!-- Header -->
+            <div class="match-dashboard-header">
+                <button class="btn-dashboard-back" id="btn-close-match-dashboard"><i class="fa-solid fa-chevron-left"></i></button>
+                <div class="match-dashboard-status">
+                    <span id="match-live-badge" class="badge-status programado">Programado</span>
+                </div>
+                <div class="match-dashboard-actions">
+                    <button class="btn-icon" title="Compartir"><i class="fa-solid fa-arrow-up-from-bracket"></i></button>
+                    <button class="btn-icon" title="Notificaciones"><i class="fa-solid fa-bell"></i></button>
+                </div>
+            </div>
+
+            <!-- Scoreboard -->
+            <div class="match-scoreboard">
+                <div class="team-panel local">
+                    <img id="match-logo-local" src="" alt="Local">
+                    <span id="match-name-local" class="team-name">Local</span>
+                    <select id="match-formacion-local" class="formacion-select" style="display:none;">
+                        <option value="4-4-2">4-4-2</option>
+                        <option value="4-3-3">4-3-3</option>
+                        <option value="3-5-2">3-5-2</option>
+                        <option value="4-2-3-1">4-2-3-1</option>
+                        <option value="5-3-2">5-3-2</option>
+                        <option value="F7 - 2-3-1">F7 (2-3-1)</option>
+                        <option value="F7 - 3-2-1">F7 (3-2-1)</option>
+                    </select>
+                </div>
+                
+                <div class="score-center">
+                    <div class="vs-text" id="match-vs-text">VS</div>
+                    <div class="live-score" id="match-live-score" style="display:none;">
+                        <span id="score-val-local">0</span> - <span id="score-val-vis">0</span>
+                    </div>
+                    <div class="match-timer" id="match-timer-display" style="display:none;">
+                        <i class="fa-regular fa-clock"></i> <span id="timer-val">00:00</span>
+                    </div>
+                </div>
+
+                <div class="team-panel visitante">
+                    <img id="match-logo-vis" src="" alt="Visitante">
+                    <span id="match-name-vis" class="team-name">Visitante</span>
+                    <select id="match-formacion-vis" class="formacion-select" style="display:none;">
+                        <option value="4-4-2">4-4-2</option>
+                        <option value="4-3-3">4-3-3</option>
+                        <option value="3-5-2">3-5-2</option>
+                        <option value="4-2-3-1">4-2-3-1</option>
+                        <option value="5-3-2">5-3-2</option>
+                        <option value="F7 - 2-3-1">F7 (2-3-1)</option>
+                        <option value="F7 - 3-2-1">F7 (3-2-1)</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="dashboard-tabs">
+                <button class="dash-tab active" data-tab="general">Vista general</button>
+                <button class="dash-tab" data-tab="alineacion">Alineación</button>
+                <button class="dash-tab" data-tab="feed">Feed</button>
+            </div>
+
+            <!-- Tab Content: General -->
+            <div class="dash-tab-content active" id="tab-general">
+                <div class="match-info-card">
+                    <h4><i class="fa-regular fa-calendar"></i> Programación</h4>
+                    <div class="info-row">
+                        <label>Fecha y Hora:</label>
+                        <input type="datetime-local" id="match-datetime-input" class="dash-input">
+                    </div>
+                    <div class="info-row">
+                        <label>Lugar/Cancha:</label>
+                        <input type="text" id="match-location-input" class="dash-input" placeholder="Ej. Cancha Principal">
+                    </div>
+                    <button class="btn-save-info" id="btn-save-match-info">Guardar Programación</button>
+                </div>
+
+                <div class="quick-actions-panel">
+                    <h4>Acciones Rápidas</h4>
+                    <div class="actions-grid">
+                        <button class="action-btn gol" id="btn-action-gol"><i class="fa-solid fa-trophy"></i><span>Gol</span></button>
+                        <button class="action-btn amarilla" id="btn-action-amarilla"><i class="fa-solid fa-square" style="color:var(--card-yellow);"></i><span>Amarilla</span></button>
+                        <button class="action-btn roja" id="btn-action-roja"><i class="fa-solid fa-square" style="color:var(--card-red);"></i><span>Roja</span></button>
+                        <button class="action-btn cambio" id="btn-action-cambio"><i class="fa-solid fa-right-left"></i><span>Cambio</span></button>
+                        <button class="action-btn minutos" id="btn-action-minutos"><i class="fa-regular fa-clock"></i><span>Minutos</span></button>
+                    </div>
+                    <button class="btn-start-match" id="btn-start-match">INICIAR PARTIDO</button>
+                    <button class="btn-end-match" id="btn-end-match" style="display:none;">FINALIZAR PARTIDO OFICIALMENTE</button>
+                    <button class="btn-forfeit" id="btn-forfeit-match">FORFEIT (W.O. 3-0)</button>
+                </div>
+            </div>
+
+            <!-- Tab Content: Alineacion -->
+            <div class="dash-tab-content" id="tab-alineacion">
+                <div class="alineaciones-container">
+                    <div class="alineacion-col local-col">
+                        <h4>Titulares Local</h4>
+                        <div class="players-list" id="alineacion-titulares-local"></div>
+                        <h4>Suplentes</h4>
+                        <div class="players-list" id="alineacion-suplentes-local"></div>
+                        <button class="btn-edit-alineacion" data-team="local"><i class="fa-solid fa-users"></i> Editar Convocatoria</button>
+                    </div>
+                    <div class="alineacion-col vis-col">
+                        <h4>Titulares Visitante</h4>
+                        <div class="players-list" id="alineacion-titulares-vis"></div>
+                        <h4>Suplentes</h4>
+                        <div class="players-list" id="alineacion-suplentes-vis"></div>
+                        <button class="btn-edit-alineacion" data-team="vis"><i class="fa-solid fa-users"></i> Editar Convocatoria</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Feed -->
+            <div class="dash-tab-content" id="tab-feed">
+                <div class="feed-container" id="match-live-feed">
+                    <div class="feed-empty">No hay eventos aún. ¡Inicia el partido!</div>
+                </div>
+            </div>
+            
+        </div>
+    </div>
+
+    <!-- Modal Seleccionar Jugador (Sub-modal para acciones) -->
+    <div class="modal-overlay" id="modal-select-player" style="z-index: 2100;">
+        <div class="modal-content options-modal" style="max-width: 400px;">
+            <div class="modal-header">
+                <h2 id="select-player-title">Seleccionar Jugador</h2>
+                <button class="close-btn" id="btn-close-select-player"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="team-selector-tabs">
+                    <button class="team-sel-tab active" id="tab-sel-local">Local</button>
+                    <button class="team-sel-tab" id="tab-sel-vis">Visitante</button>
+                </div>
+                <div class="player-selection-list" id="player-selection-list">
+                    <!-- Jugadores renderizados aquí -->
+                </div>
+                
+                <!-- Extra input para minutos si es necesario -->
+                <div id="minutos-input-container" style="display:none; margin-top:15px;">
+                    <label style="color:#fff;">Minutos jugados:</label>
+                    <input type="number" id="input-minutos-jugados" class="dash-input" placeholder="Ej. 45" style="margin-top:5px;">
+                </div>
+                
+                <!-- Extra input para cambios si es necesario -->
+                <div id="cambio-input-container" style="display:none; margin-top:15px;">
+                    <label style="color:#fff;">Entra (Jugador de banca):</label>
+                    <select id="select-jugador-entra" class="dash-input" style="margin-top:5px;"></select>
+                </div>
+
+                <button class="btn-save-info" id="btn-confirm-action" style="margin-top:20px; width:100%;">Confirmar Acción</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal Editar Convocatoria -->
+    <div class="modal-overlay" id="modal-edit-convocatoria" style="z-index: 2100;">
+        <div class="modal-content" style="max-width: 600px; height: 80vh; display:flex; flex-direction:column;">
+            <div class="modal-header">
+                <h2 id="convocatoria-title">Convocatoria</h2>
+                <button class="close-btn" id="btn-close-convocatoria"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body" style="flex:1; overflow-y:auto;">
+                <p style="color:var(--text-muted); font-size:13px; margin-bottom:15px;">Selecciona los jugadores que participarán. Los primeros 11 serán marcados como titulares, el resto como suplentes.</p>
+                <div id="convocatoria-list" class="convocatoria-list"></div>
+            </div>
+            <div class="modal-footer" style="padding:15px; border-top:1px solid rgba(255,255,255,0.1);">
+                <button class="btn-save-info" id="btn-save-convocatoria" style="width:100%;">Guardar Convocatoria</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Resultado Rápido (Simple) -->
+    <div class="modal-overlay" id="modal-resultado-rapido">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h2>Resultado Rápido</h2>
+                <button class="close-btn" id="btn-close-resultado-rapido"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                    <div style="text-align:center; flex:1;">
+                        <img id="res-rapido-img-local" src="" style="width:60px; height:60px; object-fit:cover; border-radius:50%; margin-bottom:10px;">
+                        <h4 id="res-rapido-name-local" style="color:white; font-size:0.9rem;">Local</h4>
+                        <input type="number" id="res-rapido-goles-local" class="dash-input" style="width:80px; text-align:center; font-size:1.5rem; margin-top:10px;" min="0">
+                    </div>
+                    <div style="font-size:1.5rem; font-weight:bold; color:var(--text-muted); padding:0 15px;">-</div>
+                    <div style="text-align:center; flex:1;">
+                        <img id="res-rapido-img-vis" src="" style="width:60px; height:60px; object-fit:cover; border-radius:50%; margin-bottom:10px;">
+                        <h4 id="res-rapido-name-vis" style="color:white; font-size:0.9rem;">Visitante</h4>
+                        <input type="number" id="res-rapido-goles-vis" class="dash-input" style="width:80px; text-align:center; font-size:1.5rem; margin-top:10px;" min="0">
+                    </div>
+                </div>
+
+                <!-- Botones de estadísticas rápidas -->
+                <div class="quick-actions-panel" style="background:transparent; border:none; padding:0; margin-bottom: 20px;">
+                    <h4 style="font-size: 0.8rem; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;">AGREGAR ESTADÍSTICAS</h4>
+                    <div class="actions-grid" style="grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 15px;">
+                        <button class="action-btn gol btn-fast-action" data-action="gol"><i class="fa-solid fa-trophy"></i><span>Gol</span></button>
+                        <button class="action-btn amarilla btn-fast-action" data-action="amarilla"><i class="fa-solid fa-square" style="color:var(--card-yellow);"></i><span>Amarilla</span></button>
+                        <button class="action-btn roja btn-fast-action" data-action="roja"><i class="fa-solid fa-square" style="color:var(--card-red);"></i><span>Roja</span></button>
+                        <button class="action-btn cambio btn-fast-action" data-action="cambio"><i class="fa-solid fa-right-left"></i><span>Cambio</span></button>
+                        <button class="action-btn minutos btn-fast-action" data-action="minutos"><i class="fa-regular fa-clock"></i><span>Minutos</span></button>
+                    </div>
+                </div>
+                <button class="btn-save-info" id="btn-save-resultado-rapido" style="width:100%;">Guardar Resultado Final</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Script -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="js/db.js?v=2"></script>
+    <script src="js/app.js?v=3"></script>
+</body>
+</html>
