@@ -102,108 +102,109 @@
             display: none;
         }
 
-        @media print {
-            body {
-                background: white !important;
-                color: black !important;
-                font-family: "Times New Roman", Times, serif;
-                display: block;
-                margin: 0;
-                padding: 0;
-            }
+        /* --- PDF EXPORT STYLES --- */
+        .pdf-mode {
+            background: white !important;
+            color: black !important;
+            font-family: "Times New Roman", Times, serif;
+            display: block;
+            margin: 0;
+            padding: 0;
+        }
 
-            .container {
-                display: none !important;
-            }
+        .pdf-mode .container {
+            display: none !important;
+        }
 
-            #print-area {
-                display: block !important;
-                width: 100%;
-                padding: 40px;
-                box-sizing: border-box;
-            }
+        .pdf-mode #print-area {
+            display: block !important;
+            width: 100%;
+            padding: 40px;
+            box-sizing: border-box;
+            background: white;
+            color: black;
+        }
 
-            .header-print {
-                display: flex;
-                justify-content: space-between;
-                align-items: flex-start;
-                text-align: center;
-                margin-bottom: 40px;
-            }
+        .header-print {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            text-align: center;
+            margin-bottom: 40px;
+        }
 
-            .header-print img {
-                width: 80px;
-            }
+        .header-print img {
+            width: 80px;
+        }
 
-            .header-print .text-center {
-                flex: 1;
-                font-weight: bold;
-                font-size: 14px;
-                line-height: 1.5;
-            }
+        .header-print .text-center {
+            flex: 1;
+            font-weight: bold;
+            font-size: 14px;
+            line-height: 1.5;
+        }
 
-            .print-title {
-                text-align: center;
-                font-weight: bold;
-                margin: 30px 0;
-                font-size: 16px;
-            }
+        .print-title {
+            text-align: center;
+            font-weight: bold;
+            margin: 30px 0;
+            font-size: 16px;
+        }
 
-            .print-body {
-                font-size: 14px;
-                line-height: 1.8;
-                text-align: justify;
-            }
+        .print-body {
+            font-size: 14px;
+            line-height: 1.8;
+            text-align: justify;
+        }
 
-            .field-line {
-                border-bottom: 1px solid black;
-                display: inline-block;
-                min-width: 100px;
-                text-align: center;
-                font-weight: bold;
-                padding: 0 10px;
-                color: red !important;
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-            }
+        .field-line {
+            border-bottom: 1px solid black;
+            display: inline-block;
+            min-width: 100px;
+            text-align: center;
+            font-weight: bold;
+            padding: 0 10px;
+            color: red !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
 
-            .field-line.black {
-                color: black !important;
-            }
+        .field-line.black {
+            color: black !important;
+        }
 
-            .form-row-print {
-                margin: 15px 0;
-                display: flex;
-                align-items: flex-end;
-            }
+        .form-row-print {
+            margin: 15px 0;
+            display: flex;
+            align-items: flex-end;
+        }
 
-            .form-row-print .label {
-                margin-right: 10px;
-                white-space: nowrap;
-            }
+        .form-row-print .label {
+            margin-right: 10px;
+            white-space: nowrap;
+        }
 
-            .form-row-print .line {
-                flex: 1;
-                border-bottom: 1px solid black;
-                font-weight: bold;
-                padding-left: 10px;
-            }
+        .form-row-print .line {
+            flex: 1;
+            border-bottom: 1px solid black;
+            font-weight: bold;
+            padding-left: 10px;
+        }
 
-            .signatures {
-                margin-top: 80px;
-                display: flex;
-                justify-content: space-around;
-                text-align: center;
-            }
+        .signatures {
+            margin-top: 80px;
+            display: flex;
+            justify-content: space-around;
+            text-align: center;
+        }
 
-            .signature-box {
-                width: 250px;
-            }
+        .signature-box {
+            width: 250px;
+        }
 
-            .signature-line {
-                border-bottom: 1px solid black;
-                margin-bottom: 10px;
-            }
+        .signature-line {
+            border-bottom: 1px solid black;
+            margin-bottom: 10px;
         }
     </style>
 </head>
@@ -304,8 +305,9 @@
         </div>
     </div>
 
-    <!-- Cargar Supabase UMD -->
+    <!-- Librerías JS -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script src="js/db.js"></script>
     <script src="js/inscripcion.js"></script>
 </body>
