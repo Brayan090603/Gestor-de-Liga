@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Importar Jugadores</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body style="font-family: sans-serif; padding: 20px;">
+    <h2>Importador de Jugadores</h2>
+    <p>Este script insertará automáticamente los jugadores de tus fotos en la base de datos de Supabase.</p>
+    <button id="btn-importar" style="padding: 10px 20px; font-size: 16px; background: #10B981; color: white; border: none; border-radius: 5px; cursor: pointer;">
+        Importar Todos los Jugadores
+    </button>
+    <div id="log" style="margin-top: 20px; padding: 10px; background: #f1f5f9; border: 1px solid #cbd5e1; height: 300px; overflow-y: auto;">
+        Esperando a iniciar...
+    </div>
+
+    <!-- Cargar DB instance -->
+    <script src="js/db.js"></script>
+
+    <script>
+        const playersToImport = [
+            // FC MUSULI
+            { team: "FC MUSULI", name: "Efrain Antonio Casco Cruz" },
+            { team: "FC MUSULI", name: "Edwar Alexander Fajardo P" },
+            { team: "FC MUSULI", name: "Norman Adiac Escoto Gutierrez" },
+            { team: "FC MUSULI", name: "Francisco Noel Matey Peralta" },
+            { team: "FC MUSULI", name: "Bayardo Antonio Gonzalez Villareyna" },
+            { team: "FC MUSULI", name: "Luis Alejandro Lanuza Martinez" },
+            { team: "FC MUSULI", name: "Luis Adolfo Centeno Espinoza" },
+            { team: "FC MUSULI", name: "Egdiel Jose Cruz Cruz" },
+            { team: "FC MUSULI", name: "Alex Junior Cruz Fuente" },
+            { team: "FC MUSULI", name: "Ever Uriel Acuña Espinoza" },
+            { team: "FC MUSULI", name: "Erick Daniel Cruz Jarquin" },
+            { team: "FC MUSULI", name: "Lener Leonel Martinez Olivas" },
+            { team: "FC MUSULI", name: "Jesser Francisco Acuña cruz" },
+            { team: "FC MUSULI", name: "Jose Enmanuel Gonzalez villareyna" },
+            { team: "FC MUSULI", name: "Hiker Moises Amador" },
+            { team: "FC MUSULI", name: "Yousef Antonio Quintero C" },
+            { team: "FC MUSULI", name: "Marvin Leonardo Gomez Martinez" },
+            { team: "FC MUSULI", name: "Carlos Uriel Hernandez Cruz" },
+            { team: "FC MUSULI", name: "Raul Antonio Cordoba Castillo" },
+            { team: "FC MUSULI", name: "Lester Noe Acuña Cuadra" },
+            { team: "FC MUSULI", name: "Dariel Jose Lopez Davila" },
+            { team: "FC MUSULI", name: "Ojani Alviery Gomez Morales" },
+
+            // FC CALERA
+            { team: "FC CALERA", name: "Arlin Noe Nuñez Rizo" },
+            { team: "FC CALERA", name: "Oswaldo Noe Moreno Iglesias" },
+            { team: "FC CALERA", name: "Eddy Jose Castellon Galeano" },
+            { team: "FC CALERA", name: "Felix Nahun Iglesias Perez" },
+            { team: "FC CALERA", name: "Gabriel Alejandro Garcia Carrasco" },
+            { team: "FC CALERA", name: "Jaime Ramon Calero Olivas" },
+            { team: "FC CALERA", name: "Jeser Nomar Gonzalez Benavidez" },
+            { team: "FC CALERA", name: "Jimmy Francisco Joya Iglesia" },
+            { team: "FC CALERA", name: "Cristian Jose Garay Olivas" },
+            { team: "FC CALERA", name: "Marvin Yuriel Olivas Castellon" },
+            { team: "FC CALERA", name: "Yader Martin Figueroa Gerrero" },
+            { team: "FC CALERA", name: "Oscar Osmin Miranda Guerrero" },
+            { team: "FC CALERA", name: "Darwin Adalberto Aldana Sanchez" },
+            { team: "FC CALERA", name: "Dickson Aristides Obando Sanchez" },
+            { team: "FC CALERA", name: "Yeral Alexander Gradyz Vanegas" },
+            { team: "FC CALERA", name: "Ubtla Jonatan Villareal Lopez" },
+
+            // SCHALQUE 04
+            { team: "SCHALQUE 04", name: "Anibal Alejandro Rivera Acuña" },
+            { team: "SCHALQUE 04", name: "Carlos Antonio Torrez Zamora" },
+            { team: "SCHALQUE 04", name: "Santos Enmanuel Gonzalez Vallecillo" },
+            { team: "SCHALQUE 04", name: "Eliezer Eden Zamora Molina" },
+            { team: "SCHALQUE 04", name: "Erick Ramon Zeledon Iglesias" },
+            { team: "SCHALQUE 04", name: "Erick Samuel Garay Martinez" },
+            { team: "SCHALQUE 04", name: "Enderson Ariel Cornejo Lopez" },
+            { team: "SCHALQUE 04", name: "Howard Jair Pineda Acuña" },
+            { team: "SCHALQUE 04", name: "Milton Manuel Gutierrez Hernandez" },
+            { team: "SCHALQUE 04", name: "Alexis Enmanuel Mejia Bellorin" },
+            { team: "SCHALQUE 04", name: "Javier Josue Sanchez Figueroa" },
+            { team: "SCHALQUE 04", name: "Hasley Ramon Bellorin Ramirez" },
+            { team: "SCHALQUE 04", name: "Jorling Uriel Gonzalez Centeno" },
+            { team: "SCHALQUE 04", name: "Marlon Joel Martinez Cordoba" },
+            { team: "SCHALQUE 04", name: "Francisco Enrique Padilla Rios" },
+            { team: "SCHALQUE 04", name: "Osman Ariel Martinez Cordoba" },
+            { team: "SCHALQUE 04", name: "Walter Antonio López Flores" },
+            { team: "SCHALQUE 04", name: "Walter Jose Garcia Calderon" },
+            { team: "SCHALQUE 04", name: "Wilson Jonny Ascencio Herrera" },
+
+            // PC GALAXI / GALAXY
+            { team: "PC GALAXI", name: "Andriu Said Cruz Davila" },
+            { team: "PC GALAXI", name: "Angel Jose Lopez Gonzalez" },
+            { team: "PC GALAXI", name: "Kevin Josue Navarrete Baltodano" },
+            { team: "PC GALAXI", name: "Charlin Noe Garcia Moncada" },
+            { team: "PC GALAXI", name: "Cristian Josue Acuña Pastrana" },
+            { team: "PC GALAXI", name: "Devis Dijen Cruz Cruz" },
+            { team: "PC GALAXI", name: "Eduard Yassir Cruz Molina" },
+            { team: "PC GALAXI", name: "Jarvin Jhossaell Centeno Garcia" },
+            { team: "PC GALAXI", name: "Walmer Eli Carballo Garcia" },
+            { team: "PC GALAXI", name: "Jorge Luis Martinez Moncada" },
+            { team: "PC GALAXI", name: "Jose Gabino Cruz Lopez" },
+            { team: "PC GALAXI", name: "Joseph Alberto Bordas Ponce" },
+            { team: "PC GALAXI", name: "Luis Enrrique Navarro Perez" },
+            { team: "PC GALAXI", name: "Marlon Ivan Castillo Cruz" },
+            { team: "PC GALAXI", name: "Marvin Antonio Moncada Pastrana" },
+            { team: "PC GALAXI", name: "Norman Alexander Navarrete Baltodano" },
+            { team: "PC GALAXI", name: "Norman Noel Navarrete" },
+            { team: "PC GALAXI", name: "Walter Javier Vilchez Martinez" },
+            { team: "PC GALAXI", name: "Wilder Alfredo Loza Morales" },
+            { team: "PC GALAXI", name: "Jorge Luis Molina Carballo" },
+
+            // FC ROSALES
+            { team: "FC ROSALES", name: "Cristian de Jesus Matute Sanchez" },
+            { team: "FC ROSALES", name: "Javier Antonio Rosales Matute" },
+            { team: "FC ROSALES", name: "Jose Alexander Avila Rosales" },
+            { team: "FC ROSALES", name: "Josuath Damir Matute Rosales" },
+            { team: "FC ROSALES", name: "Juan Pedro Matey Peralta" },
+            { team: "FC ROSALES", name: "Rodemberto Matute Landero" },
+            { team: "FC ROSALES", name: "Wilder Josue Perez Lopez" },
+            { team: "FC ROSALES", name: "Wilmer Javier Perez Lopez" },
+            { team: "FC ROSALES", name: "Wilmer Obieth Ruiz Briones" },
+            { team: "FC ROSALES", name: "Darwin Joel Gonzalez Hernandez" },
+            { team: "FC ROSALES", name: "Alvaro Efren Gonzalez Hernandez" },
+            { team: "FC ROSALES", name: "Alvaro Manuel Lopez Rosales" },
+            { team: "FC ROSALES", name: "Cristian Antonio Lopez Rosales" },
+            { team: "FC ROSALES", name: "Marlon Oneder Castillo Calderon" },
+            { team: "FC ROSALES", name: "Oneyser de Jesus Lopez Rosales" },
+            { team: "FC ROSALES", name: "Santiago Jose Gonzalez Rosalez" },
+            { team: "FC ROSALES", name: "Edwin Fabricio Gonzalez Cordoba" },
+            { team: "FC ROSALES", name: "Enardo Josue Izaguirre Garcia" },
+            { team: "FC ROSALES", name: "Wilmer Alexander Rosales Olivas" }
+        ];
+
+        function log(msg) {
+            const div = document.getElementById('log');
+            div.innerHTML += `<div>${msg}</div>`;
+            div.scrollTop = div.scrollHeight;
+        }
+
+        document.getElementById('btn-importar').addEventListener('click', async () => {
+            const btn = document.getElementById('btn-importar');
+            btn.disabled = true;
+            btn.textContent = "Procesando...";
+
+            try {
+                // 1. Obtener torneo activo desde localStorage
+                let torneoId = localStorage.getItem('torneo_activo_id');
+                
+                if (!torneoId) {
+                    const { data: latestTorneo } = await window.supabase.from('torneos').select('id').order('created_at', { ascending: false }).limit(1).single();
+                    if (latestTorneo) {
+                        torneoId = latestTorneo.id;
+                    }
+                }
+
+                if (!torneoId) {
+                    log("No hay torneo activo, abortando.");
+                    return;
+                }
+                log(`Torneo Activo ID: ${torneoId}`);
+
+                // 2. Cargar todos los equipos del torneo
+                let { data: equipos } = await window.supabase.from('equipos').select('id, nombre').eq('torneo_id', torneoId);
+                log(`Se encontraron ${equipos.length} equipos en la base de datos.`);
+
+                // Preparar mapa de nombres a IDs
+                const equipoMap = {};
+                equipos.forEach(eq => {
+                    equipoMap[eq.nombre.toUpperCase()] = eq.id;
+                });
+
+                let insertCount = 0;
+                let skipCount = 0;
+                let equiposCreados = 0;
+
+                for (const p of playersToImport) {
+                    let eqId = equipoMap[p.team.toUpperCase()];
+                    
+                    if (!eqId) {
+                        // Buscar aproximado
+                        const match = equipos.find(e => e.nombre.toUpperCase().includes(p.team.toUpperCase()) || p.team.toUpperCase().includes(e.nombre.toUpperCase()));
+                        if (match) {
+                            eqId = match.id;
+                        } else {
+                            // ¡CREAR EL EQUIPO AUTOMÁTICAMENTE!
+                            log(`<span style="color:orange">El equipo "${p.team}" no existe. Creándolo automáticamente...</span>`);
+                            
+                            const newTeamId = Date.now().toString() + Math.floor(Math.random() * 1000);
+                            
+                            const { error: eqError } = await window.supabase.from('equipos').insert([{
+                                id: newTeamId,
+                                torneo_id: torneoId,
+                                nombre: p.team,
+                                logo: ''
+                            }]);
+                            
+                            if (eqError) {
+                                log(`<span style="color:red">Error creando equipo ${p.team}: ${eqError.message}</span>`);
+                                skipCount++;
+                                continue;
+                            }
+                            
+                            eqId = newTeamId;
+                            equipoMap[p.team.toUpperCase()] = eqId;
+                            equipos.push({ id: eqId, nombre: p.team });
+                            equiposCreados++;
+                        }
+                    }
+
+                    // Generar un ID único para el jugador
+                    const playerId = Date.now().toString() + Math.floor(Math.random() * 1000000);
+
+                    // Insertar jugador
+                    const { error } = await window.supabase.from('jugadores').insert([{
+                        id: playerId,
+                        torneo_id: torneoId,
+                        equipo_id: eqId,
+                        nombre: p.name,
+                        status: 'activo',
+                        is_novato: false,
+                        is_portero: false,
+                        stats_apertura_goles: 0,
+                        stats_apertura_amarillas: 0,
+                        stats_apertura_rojas: 0,
+                        stats_apertura_goles_recibidos: 0,
+                        stats_clausura_goles: 0,
+                        stats_clausura_amarillas: 0,
+                        stats_clausura_rojas: 0,
+                        stats_clausura_goles_recibidos: 0
+                    }]);
+
+                    if (error) {
+                        log(`<span style="color:red">ERROR insertando a ${p.name}: ${error.message}</span>`);
+                    } else {
+                        log(`<span style="color:green">Ingresado: ${p.name} (${p.team})</span>`);
+                        insertCount++;
+                    }
+                }
+
+                log(`<br><strong>¡PROCESO TERMINADO!</strong> Equipos creados: ${equiposCreados} | Jugadores insertados: ${insertCount} | Omitidos: ${skipCount}`);
+
+            } catch (err) {
+                log(`<span style="color:red">Error crítico: ${err.message}</span>`);
+            } finally {
+                btn.textContent = "Finalizado";
+            }
+        });
+    </script>
+</body>
+</html>

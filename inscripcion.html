@@ -118,11 +118,17 @@
 
         .pdf-mode #print-area {
             display: block !important;
-            width: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 800px;
+            max-width: none;
+            margin: 0;
             padding: 40px;
             box-sizing: border-box;
             background: white;
             color: black;
+            z-index: 9999;
         }
 
         .header-print {
@@ -130,11 +136,13 @@
             justify-content: space-between;
             align-items: flex-start;
             text-align: center;
-            margin-bottom: 40px;
+            margin-bottom: 30px;
         }
 
         .header-print img {
             width: 80px;
+            height: 80px;
+            object-fit: contain;
         }
 
         .header-print .text-center {
@@ -142,18 +150,19 @@
             font-weight: bold;
             font-size: 14px;
             line-height: 1.5;
+            padding: 0 15px;
         }
 
         .print-title {
             text-align: center;
             font-weight: bold;
-            margin: 30px 0;
+            margin: 20px 0;
             font-size: 16px;
         }
 
         .print-body {
             font-size: 14px;
-            line-height: 1.8;
+            line-height: 1.6;
             text-align: justify;
         }
 
@@ -174,7 +183,7 @@
         }
 
         .form-row-print {
-            margin: 15px 0;
+            margin: 12px 0;
             display: flex;
             align-items: flex-end;
         }
@@ -192,19 +201,20 @@
         }
 
         .signatures {
-            margin-top: 80px;
+            margin-top: 50px;
             display: flex;
-            justify-content: space-around;
+            justify-content: space-between;
             text-align: center;
+            page-break-inside: avoid;
         }
 
         .signature-box {
-            width: 250px;
+            width: 45%;
         }
 
         .signature-line {
             border-bottom: 1px solid black;
-            margin-bottom: 10px;
+            margin-bottom: 8px;
         }
     </style>
 </head>
@@ -239,6 +249,15 @@
             <div class="form-group">
                 <label>Dirección</label>
                 <input type="text" id="input-direccion" required placeholder="Barrio / Comunidad">
+            </div>
+
+            <div class="form-group" style="display: flex; gap: 20px;">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input type="checkbox" id="input-is-novato" style="width: auto;"> Es Novato
+                </label>
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input type="checkbox" id="input-is-portero" style="width: auto;"> Es Portero
+                </label>
             </div>
 
             <button type="submit" class="btn-submit"><i class="fa-solid fa-file-pdf"></i> Generar Carta</button>

@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/style.css?v=3">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
@@ -32,6 +32,9 @@
                 </a>
                 <a href="#" class="nav-item" data-view="mercado" data-tab="mercado">
                     <i class="fa-solid fa-right-left"></i> Mercado (Altas/Bajas)
+                </a>
+                <a href="#" class="nav-item" data-view="inactivos" data-tab="inactivos">
+                    <i class="fa-solid fa-user-slash"></i> Agentes Libres / Inactivos
                 </a>
                 <a href="#" class="nav-item" data-view="sorteos" data-tab="sorteos">
                     <i class="fa-solid fa-shuffle"></i> Sorteos / Partidos
@@ -260,7 +263,12 @@
                             </div>
                         </div>
                         
-                        <button class="btn-primary" id="btn-inline-add-player" style="position: absolute; bottom: -45px; right: 15px; width: auto; box-shadow: 0 4px 10px rgba(16,185,129,0.3);"><i class="fa-solid fa-plus"></i> Añadir Jugador</button>
+                        <div style="position: absolute; bottom: -45px; right: 15px; display: flex; gap: 10px;">
+                            <button class="btn-primary" id="btn-delete-team" style="width: auto; background: var(--error-color, #ef4444); border:none; box-shadow: 0 4px 10px rgba(239,68,68,0.3);" onclick="confirmDeleteTeam()"><i class="fa-solid fa-trash"></i> Eliminar Equipo</button>
+                            <input type="file" id="upload-plantilla-scan" style="display:none;" accept="image/*" capture="environment">
+                            <button class="btn-primary" id="btn-scan-plantilla" style="width: auto; background: #3B82F6; box-shadow: 0 4px 10px rgba(59,130,246,0.3);"><i class="fa-solid fa-camera"></i> Escanear Plantilla</button>
+                            <button class="btn-primary" id="btn-inline-add-player" style="width: auto; box-shadow: 0 4px 10px rgba(16,185,129,0.3);"><i class="fa-solid fa-plus"></i> Añadir Jugador</button>
+                        </div>
                     </div>
                     <section class="table-section">
                         <div class="table-header">
@@ -350,40 +358,110 @@
                 <!-- VIEW: SORTEOS -->
                 <div id="view-sorteos" class="view-section">
                     <div class="market-grid">
-                        <section class="table-section" style="flex: 1;">
-                            <div class="table-header">
-                                <h3 style="color: var(--accent-primary)"><i class="fa-solid fa-gear"></i> Opciones del Sorteo</h3>
+                        <section class="table-section" style="flex: 1; background: transparent; border: none; box-shadow: none;">
+                            <!-- Dashboard Header (Selector and controls) -->
+                            <div class="calendar-dashboard-header" style="background: linear-gradient(145deg, rgba(30, 41, 59, 0.8), rgba(15, 23, 42, 0.9)); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 16px; padding: 25px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 20px; margin-bottom: 24px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); backdrop-filter: blur(10px);">
+                                <div style="display: flex; align-items: center; gap: 15px;">
+                                    <div style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); width: 55px; height: 55px; border-radius: 14px; display: flex; align-items: center; justify-content: center; color: white; font-size: 1.6rem; box-shadow: 0 4px 15px rgba(37, 99, 235, 0.4);">
+                                        <i class="fa-solid fa-calendar-check"></i>
+                                    </div>
+                                    <div>
+                                        <h3 style="margin: 0; color: #f8fafc; font-size: 1.3rem; font-weight: 700; letter-spacing: 0.5px;">Gestión de Calendarios</h3>
+                                        <p style="margin: 3px 0 0 0; color: #94a3b8; font-size: 0.95rem;">Administra tus torneos y fases de manera inteligente</p>
+                                    </div>
+                                </div>
+                                
+                                <div style="display: flex; gap: 10px; align-items: center;">
+                                    <select id="calendario-selector" class="form-control" style="flex: 1; min-width: 150px; max-width: 250px; border-radius: 8px; font-weight: bold; background: rgba(0,0,0,0.2);">
+                                        <option value="default">Torneo Principal</option>
+                                    </select>
+                                    <button type="button" id="btn-nuevo-calendario" class="btn-primary" style="flex-shrink: 0; width: auto; border-radius: 8px; padding: 8px 15px;" title="Nuevo Calendario"><i class="fa-solid fa-plus"></i></button>
+                                    <button type="button" id="btn-eliminar-calendario" class="btn-danger" style="flex-shrink: 0; width: auto; border-radius: 8px; padding: 8px 15px;" title="Eliminar Calendario"><i class="fa-solid fa-trash"></i></button>
+                                </div>
                             </div>
-                            <div class="table-container" style="padding: 20px;">
+                            
+                            <!-- Generar Nuevo (Empty State) -->
+                            <div id="panel-generar-calendario" style="background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(255,255,255,0.05); border-radius: 16px; padding: 35px; box-shadow: inset 0 2px 15px rgba(0,0,0,0.2);">
+                                <div style="text-align: center; margin-bottom: 30px;">
+                                    <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.1); width: 70px; height: 70px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #64748b; font-size: 1.8rem; margin: 0 auto 15px auto;">
+                                        <i class="fa-solid fa-wand-magic-sparkles"></i>
+                                    </div>
+                                    <h4 style="margin: 0; color: #e2e8f0; font-size: 1.4rem; font-weight: 600;">Configurar Nuevo Calendario</h4>
+                                    <p style="color: #64748b; margin-top: 8px; font-size: 0.95rem;">Selecciona el formato y genera los partidos iniciales</p>
+                                </div>
                                 <form id="form-generar-sorteo">
-                                    <div class="form-group">
-                                        <label>Tipo de Fase</label>
-                                        <select id="sorteo-fase" class="form-control" required>
-                                            <option value="liga">Liga (Todos contra Todos)</option>
-                                            <option value="grupos">Fase de Grupos</option>
-                                            <option value="eliminatorias">Fases Eliminatorias (Emparejamiento Directo)</option>
-                                        </select>
+                                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
+                                        <div class="form-group">
+                                            <label style="color: var(--text-primary);"><i class="fa-solid fa-sitemap" style="color: var(--accent-primary); margin-right: 5px;"></i> Tipo de Sorteo / Fase</label>
+                                            <select id="sorteo-fase" class="form-control" style="background: rgba(0,0,0,0.2);" required>
+                                                <option value="liga">Liga (Todos contra Todos)</option>
+                                                <option value="grupos">Fase de Grupos</option>
+                                                <option value="eliminatorias_aleatorias">Llaves Eliminatorias (Aleatorio)</option>
+                                                <option value="eliminatorias_clasificacion">Llaves Eliminatorias (Clasificación)</option>
+                                            </select>
+                                        </div>
+                                        
+                                        <div class="form-group">
+                                            <label style="color: var(--text-primary);"><i class="fa-solid fa-clock" style="color: var(--accent-primary); margin-right: 5px;"></i> Formato de Partido</label>
+                                            <select id="sorteo-formato" class="form-control" style="background: rgba(0,0,0,0.2);" required>
+                                                <option value="ida">Solo Ida</option>
+                                                <option value="idayvuelta">Ida y Vuelta</option>
+                                            </select>
+                                        </div>
+
+                                        <div class="form-group" id="grupo-num-container" style="display: none;">
+                                            <label style="color: var(--text-primary);"><i class="fa-solid fa-layer-group" style="color: var(--accent-primary); margin-right: 5px;"></i> Cantidad de Grupos</label>
+                                            <input type="number" id="sorteo-grupos-num" class="form-control" min="2" max="8" value="2" style="background: rgba(0,0,0,0.2);">
+                                        </div>
+
+                                        <div class="form-group" id="eliminatoria-top-container" style="display: none;">
+                                            <label style="color: var(--text-primary);"><i class="fa-solid fa-ranking-star" style="color: var(--accent-primary); margin-right: 5px;"></i> Equipos Clasificados</label>
+                                            <select id="sorteo-top-num" class="form-control" style="background: rgba(0,0,0,0.2);">
+                                                <option value="4">Top 4 (Semifinales)</option>
+                                                <option value="8">Top 8 (Cuartos de Final)</option>
+                                                <option value="16">Top 16 (Octavos de Final)</option>
+                                                <option value="32">Top 32 (Dieciseisavos)</option>
+                                            </select>
+                                            <small style="color: var(--text-muted); display: block; margin-top: 5px;">1º vs Último, 2º vs Penúltimo, etc.</small>
+                                        </div>
                                     </div>
-                                    <div class="form-group" id="grupo-num-container" style="display: none;">
-                                        <label>Cantidad de Grupos</label>
-                                        <input type="number" id="sorteo-grupos-num" class="form-control" min="2" max="8" value="2">
+                                    
+                                    
+                                    <div style="display: flex; gap: 15px; margin-top: 30px;">
+                                        <button type="submit" class="btn-primary" style="flex: 1; padding: 14px; font-size: 1.1rem; font-weight: 600; border-radius: 10px; background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%); border: none; box-shadow: 0 6px 20px rgba(109, 40, 217, 0.3); transition: all 0.3s ease;"><i class="fa-solid fa-bolt" style="margin-right: 8px;"></i> Generar Mágicamente</button>
+                                        <button type="button" onclick="window.startManualCalendar()" class="btn-secondary" style="flex: 1; padding: 14px; font-size: 1.1rem; font-weight: 600; border-radius: 10px; transition: all 0.3s ease;"><i class="fa-solid fa-hand-pointer" style="margin-right: 8px;"></i> Empezar Manualmente</button>
                                     </div>
-                                    <div class="form-group">
-                                        <label>Formato de Partido</label>
-                                        <select id="sorteo-formato" class="form-control" required>
-                                            <option value="ida">Solo Ida</option>
-                                            <option value="idayvuelta">Ida y Vuelta</option>
-                                        </select>
-                                    </div>
-                                    <button type="submit" class="btn-primary" style="width: 100%; margin-top: 15px;"><i class="fa-solid fa-wand-magic-sparkles"></i> Generar Partidos Aleatoriamente</button>
                                 </form>
+                            </div>
+
+                            <!-- Panel Existente (Banner Horizontal) -->
+                            <div id="panel-agregar-fase" style="display: none;">
+                                <div style="background: var(--bg-secondary); border: 1px solid rgba(16, 185, 129, 0.3); border-left: 4px solid #10b981; border-radius: 8px; padding: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                                    <div style="display: flex; align-items: center; gap: 15px;">
+                                        <div style="background: rgba(16, 185, 129, 0.1); color: #10b981; width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">
+                                            <i class="fa-solid fa-calendar-check"></i>
+                                        </div>
+                                        <div>
+                                            <h4 style="margin: 0 0 5px 0; color: var(--text-primary); font-size: 1.2rem;">Calendario Activo</h4>
+                                            <p style="margin: 0; color: var(--text-muted); font-size: 0.95rem; max-width: 400px;">Los partidos ya fueron generados. Puedes agregar una vuelta o crear llaves eliminatorias.</p>
+                                        </div>
+                                    </div>
+                                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                                        <button type="button" id="btn-agregar-vuelta" class="btn-secondary" style="padding: 10px 20px; border-radius: 6px;"><i class="fa-solid fa-rotate"></i> Agregar Vuelta</button>
+                                        <button type="button" id="btn-crear-llaves-fase" class="btn-primary" style="padding: 10px 20px; border-radius: 6px; background: #10b981; color: white;"><i class="fa-solid fa-sitemap"></i> Generar Llaves</button>
+                                    </div>
+                                </div>
                             </div>
                         </section>
                     </div>
 
                     <section class="table-section" style="margin-top: 24px;" id="sorteo-resultados-section">
-                        <div class="table-header">
-                            <h3><i class="fa-solid fa-calendar-days"></i> Partidos Generados</h3>
+                        <div class="table-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; padding: 20px; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                            <h3 style="margin: 0; font-size: 1.2rem; color: #f8fafc;"><i class="fa-solid fa-calendar-days" style="color: #3b82f6; margin-right: 8px;"></i> Partidos Generados</h3>
+                            <div id="sorteo-fase-tabs" style="display: none; gap: 5px; background: rgba(15, 23, 42, 0.6); padding: 6px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.05);">
+                                <button id="tab-fase-liga" style="padding: 6px 18px; border-radius: 8px; border: none; font-size: 13px; font-weight: 600; background: #3b82f6; color: white; cursor: pointer; transition: all 0.2s ease;">Partidos</button>
+                                <button id="tab-fase-llaves" style="padding: 6px 18px; border-radius: 8px; border: none; font-size: 13px; font-weight: 600; background: transparent; color: #94a3b8; cursor: pointer; transition: all 0.2s ease;">Llaves</button>
+                            </div>
                         </div>
                         <div class="table-container" style="padding: 20px; background: rgba(0,0,0,0.1);">
                             <div id="sorteo-resultados-container" style="display: grid; gap: 15px;">
@@ -408,6 +486,43 @@
                 </div>
 
                 <!-- VIEW: STATS -->
+                <!-- VIEW: AGENTES LIBRES / INACTIVOS -->
+                <div id="view-inactivos" class="view-section">
+                    <div class="view-header">
+                        <h2><i class="fa-solid fa-user-slash"></i> Agentes Libres / Inactivos</h2>
+                        <p class="text-secondary">Gestiona jugadores sin equipo, suspendidos o retirados temporalmente. Podrás reincorporarlos a cualquier equipo después.</p>
+                    </div>
+
+                    <!-- Buscador -->
+                    <div style="margin-bottom: 20px; display: flex; gap: 15px; flex-wrap: wrap; background-color: var(--bg-secondary); padding: 15px; border-radius: var(--radius-lg); border: 1px solid var(--border-color);">
+                        <div class="search-box" style="flex: 1; min-width: 250px;">
+                            <i class="fa-solid fa-magnifying-glass"></i>
+                            <input type="text" id="search-inactivos" placeholder="Buscar jugador libre por nombre o estado..." style="background: transparent; border: none; color: white; width: 100%; outline: none; margin-left: 10px;">
+                        </div>
+                    </div>
+
+                    <!-- Lista de Inactivos -->
+                    <div class="stats-table-wrapper" style="overflow-x:auto;">
+                        <table class="stats-table" style="width: 100%; min-width: 600px;">
+                            <thead>
+                                <tr>
+                                    <th style="width: 5%;">#</th>
+                                    <th style="width: 40%;">Jugador</th>
+                                    <th style="width: 25%;">Último Equipo (Historial)</th>
+                                    <th style="width: 30%; text-align: center;">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="inactivos-table-body">
+                                <!-- Filas dinámicas -->
+                            </tbody>
+                        </table>
+                        <div id="inactivos-empty-msg" style="display:none; text-align:center; padding: 40px; color: var(--text-secondary);">
+                            <i class="fa-solid fa-users-slash" style="font-size: 3rem; margin-bottom: 15px; color: var(--border-color);"></i>
+                            <p>No hay jugadores inactivos ni agentes libres en este momento.</p>
+                        </div>
+                    </div>
+                </div>
+
                 <div id="view-stats" class="view-section">
                     <div class="stat-cards">
                         <div class="card premium-card">
@@ -421,8 +536,18 @@
                     </div>
 
                     <section class="table-section" style="margin-top: 24px;">
-                        <div class="table-header">
-                            <h3>Clasificación Detallada</h3>
+                        <div class="table-header" style="display: flex; justify-content: space-between; align-items: center; padding: 15px; flex-wrap: wrap; gap: 15px; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                            <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+                                <h3 style="margin: 0; font-size: 1.1rem; color: #e2e8f0;">Clasificación Detallada</h3>
+                                <div class="search-container" style="position: relative;">
+                                    <i class="fa-solid fa-search" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #64748b; font-size: 0.9rem;"></i>
+                                    <input type="text" id="stats-search-input" placeholder="Buscar jugador o equipo..." style="background-color: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.1); color: #f8fafc; padding: 8px 15px 8px 35px; border-radius: 8px; font-size: 0.9rem; width: 250px; outline: none; transition: all 0.3s ease;">
+                                </div>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <button id="btn-add-tarjeta" style="display: none; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; border: none; font-weight: 600; padding: 8px 16px; font-size: 0.85rem; border-radius: 8px; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);"><i class="fa-solid fa-plus" style="margin-right: 5px;"></i> Añadir</button>
+                                <button id="btn-export-top10" style="display: none; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; font-weight: 600; padding: 8px 16px; font-size: 0.85rem; border-radius: 8px; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);"><i class="fa-solid fa-camera" style="margin-right: 5px;"></i> Top 10 Imagen</button>
+                            </div>
                         </div>
                         <div class="table-container">
                             <table class="data-table">
@@ -510,6 +635,7 @@
                         </div>
                         <button type="submit" class="btn-primary">Guardar Equipo</button>
                     </form>
+                    
                 </div>
 
                 <!-- Añadir Estadística -->
@@ -683,13 +809,13 @@
             </div>
             <div class="modal-body">
                 <div class="options-grid">
-                    <div class="option-item" onclick="alert('Próximamente: Agregar fecha')">
+                    <div class="option-item" onclick="window.openAddJornadaModal()">
                         <div class="option-circle opt-blue">
                             <i class="fa-solid fa-calendar-plus"></i>
                         </div>
                         <span>Agregar fecha</span>
                     </div>
-                    <div class="option-item" onclick="alert('Próximamente: Agregar partido')">
+                    <div class="option-item" onclick="window.openAddMatchManualModal()">
                         <div class="option-circle opt-orange">
                             <i class="fa-solid fa-futbol"></i>
                         </div>
@@ -701,12 +827,7 @@
                         </div>
                         <span>Editar Fecha</span>
                     </div>
-                    <div class="option-item" onclick="alert('Próximamente: Reordenar rondas')">
-                        <div class="option-circle opt-green">
-                            <i class="fa-solid fa-arrow-down-up-across-line"></i>
-                        </div>
-                        <span>Reordenar rondas</span>
-                    </div>
+
                     <div class="option-item" id="btn-abrir-exportar">
                         <div class="option-circle opt-yellow">
                             <i class="fa-solid fa-download"></i>
@@ -945,6 +1066,21 @@
                     </div>
                 </div>
 
+                <!-- Programación -->
+                <div style="background: rgba(0,0,0,0.2); padding: 15px; border-radius: 12px; margin-bottom: 20px;">
+                    <h4 style="font-size: 0.8rem; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; margin-bottom: 15px; color: #cbd5e1;">PROGRAMACIÓN DEL PARTIDO</h4>
+                    <div style="display: flex; gap: 10px;">
+                        <div style="flex:1;">
+                            <label style="font-size:12px; color:var(--text-muted); display:block; margin-bottom:5px;">Fecha</label>
+                            <input type="date" id="res-rapido-fecha" class="dash-input" style="width:100%;">
+                        </div>
+                        <div style="flex:1;">
+                            <label style="font-size:12px; color:var(--text-muted); display:block; margin-bottom:5px;">Hora</label>
+                            <input type="time" id="res-rapido-hora" class="dash-input" style="width:100%;">
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Botones de estadísticas rápidas -->
                 <div class="quick-actions-panel" style="background:transparent; border:none; padding:0; margin-bottom: 20px;">
                     <h4 style="font-size: 0.8rem; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;">AGREGAR ESTADÍSTICAS</h4>
@@ -961,11 +1097,199 @@
         </div>
     </div>
 
+    <!-- Modal Agregar Partido Manual -->
+    <div class="modal-overlay" id="modal-agregar-partido-manual">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2>Agregar Partido Manual</h2>
+                <button class="close-btn" id="btn-close-partido-manual"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body" style="padding: 1.5rem;">
+                <form id="form-agregar-partido-manual">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+                        <div class="form-group">
+                            <label>Equipo Local</label>
+                            <select id="partido-manual-local" class="form-control" style="background: rgba(0,0,0,0.2);" required>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Equipo Visitante</label>
+                            <select id="partido-manual-visitante" class="form-control" style="background: rgba(0,0,0,0.2);" required>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+                        <div class="form-group">
+                            <label>Jornada / Fecha (Ej: 1, 2, 3)</label>
+                            <input type="number" id="partido-manual-jornada" class="form-control" min="1" value="1" style="background: rgba(0,0,0,0.2);" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Fase / Tipo (Opcional)</label>
+                            <select id="partido-manual-fase" class="form-control" style="background: rgba(0,0,0,0.2);">
+                                <option value="liga">Liga / Grupos</option>
+                                <option value="eliminatoria">Eliminatoria Directa</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 25px;">
+                        <div class="form-group">
+                            <label>Día (Opcional)</label>
+                            <input type="date" id="partido-manual-fecha" class="form-control" style="background: rgba(0,0,0,0.2);">
+                        </div>
+                        <div class="form-group">
+                            <label>Hora (Opcional)</label>
+                            <input type="time" id="partido-manual-hora" class="form-control" style="background: rgba(0,0,0,0.2);">
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="btn-primary" style="width: 100%;"><i class="fa-solid fa-check"></i> Guardar Partido</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Plantilla Oculta para Redes Sociales -->
+    <div id="export-social-container">
+        <div class="export-header">
+            <img id="export-logo" src="https://cdn-icons-png.flaticon.com/512/53/53283.png" alt="Logo">
+            <div class="export-title">
+                <h2>Top Porteros</h2>
+                <p id="export-liga-name">FEMFUTPAL</p>
+            </div>
+        </div>
+        <table class="export-table">
+            <thead id="export-table-head">
+                <tr>
+                    <th>Pos</th>
+                    <th>Jugador</th>
+                    <th>Equipo</th>
+                    <th style="text-align: center;">Goles Rec.</th>
+                    <th style="text-align: center;">Minutos</th>
+                    <th style="text-align: center;">Puntos</th>
+                </tr>
+            </thead>
+            <tbody id="export-table-body">
+                <!-- Se llenará dinámicamente -->
+            </tbody>
+        </table>
+        <div class="export-footer">
+            Generado automáticamente por FEMFUTPAL - Estadísticas de Liga
+        </div>
+    </div>
+
+    <!-- Modal Editar Estadísticas Extra -->
+    <div class="modal-overlay" id="modal-editar-stats-extra">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h2>Editar Estadísticas</h2>
+                <button class="close-btn" id="btn-close-stats-extra"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body" style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem;">
+                <input type="hidden" id="edit-stats-player-id">
+                <div style="font-weight:bold; margin-bottom: 0.5rem;" id="edit-stats-player-name">Nombre del Jugador</div>
+                
+                <div class="form-group" style="margin-bottom: 0.5rem;">
+                    <label>Minutos Jugados</label>
+                    <input type="number" id="edit-stats-minutos" class="edit-input" min="0" placeholder="Ej: 90">
+                </div>
+                <div class="form-group" style="margin-bottom: 0.5rem;" id="group-stats-goles-recibidos">
+                    <label>Goles Recibidos (Solo Porteros)</label>
+                    <input type="number" id="edit-stats-goles-recibidos" class="edit-input" min="0" placeholder="Ej: 0">
+                </div>
+                
+                <div class="form-group" style="margin-bottom: 0.5rem;">
+                    <label>Goles Anotados</label>
+                    <input type="number" id="edit-stats-goles" class="edit-input" min="0" placeholder="Ej: 1">
+                </div>
+                <div class="form-group" style="margin-bottom: 0.5rem;">
+                    <label>Tarjetas Amarillas</label>
+                    <input type="number" id="edit-stats-amarillas" class="edit-input" min="0" placeholder="Ej: 0">
+                </div>
+                <div class="form-group" style="margin-bottom: 0.5rem;">
+                    <label>Tarjetas Rojas</label>
+                    <input type="number" id="edit-stats-rojas" class="edit-input" min="0" placeholder="Ej: 0">
+                </div>
+                <button class="btn-save-info" id="btn-save-stats-extra" style="width: 100%; margin-top: 1rem;">Guardar Estadísticas</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Script -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    <script src="js/db.js?v=2"></script>
-    <script src="js/app.js?v=3"></script>
+    <!-- Modal Resumen de Partido -->
+    <div class="modal-overlay" id="modal-resumen-partido">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h2>Resumen del Partido</h2>
+                <button class="close-modal"><i class="fa-solid fa-times"></i></button>
+            </div>
+            <div class="modal-body" style="padding: 2rem;">
+                <div class="resumen-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                    <div class="resumen-team local" style="display: flex; flex-direction: column; align-items: center; flex: 1; gap: 10px;">
+                        <img id="resumen-logo-local" src="" alt="" style="width: 80px; height: 80px; object-fit: cover; border-radius: 50%;">
+                        <span id="resumen-nombre-local" style="font-size: 1.2rem; font-weight: 500; text-align: center;"></span>
+                    </div>
+                    <div class="resumen-score" style="display: flex; align-items: center; gap: 20px; font-size: 2.5rem; font-weight: 800;">
+                        <span id="resumen-goles-local">0</span>
+                        <span class="resumen-divider" style="color: var(--text-muted);">-</span>
+                        <span id="resumen-goles-vis">0</span>
+                    </div>
+                    <div class="resumen-team vis" style="display: flex; flex-direction: column; align-items: center; flex: 1; gap: 10px;">
+                        <img id="resumen-logo-vis" src="" alt="" style="width: 80px; height: 80px; object-fit: cover; border-radius: 50%;">
+                        <span id="resumen-nombre-vis" style="font-size: 1.2rem; font-weight: 500; text-align: center;"></span>
+                    </div>
+                </div>
+                <div class="resumen-info-extra" style="text-align:center; color:var(--text-muted); font-size:14px; margin-bottom: 20px; text-transform: uppercase; letter-spacing: 1px;" id="resumen-fase-info"></div>
+                <div class="resumen-events-container" style="display:flex; border-top:1px solid rgba(255,255,255,0.1); padding-top:20px; font-size:14px; gap: 20px;">
+                    <div id="resumen-events-local" style="flex:1; text-align:right; display:flex; flex-direction:column; gap:8px;"></div>
+                    <div style="width:1px; background:rgba(255,255,255,0.1);"></div>
+                    <div id="resumen-events-vis" style="flex:1; text-align:left; display:flex; flex-direction:column; gap:8px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Scanner OCR -->
+    <div class="modal-overlay" id="scanner-modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <div class="modal-header">
+                <h2>Revisión de Nombres Escaneados</h2>
+                <button class="close-btn" id="btn-close-scanner"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <p style="color: var(--text-muted); margin-bottom: 20px;">Por favor revisa y corrige los nombres si el escáner tuvo algún error. Marca las casillas de novato o portero según corresponda. Si un jugador existe en otro equipo, puedes marcar "Traspasar".</p>
+                
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Nombre del Jugador</th>
+                                <th>Novato</th>
+                                <th>Portero</th>
+                                <th>Estado</th>
+                                <th>Traspasar</th>
+                                <th>Eliminar</th>
+                            </tr>
+                        </thead>
+                        <tbody id="scanner-results-body">
+                            <!-- Filas generadas dinámicamente -->
+                        </tbody>
+                    </table>
+                </div>
+                
+                <button type="button" class="btn-primary" id="btn-inscribir-escaneados" style="width: 100%; margin-top: 20px; font-size: 1.1rem; padding: 12px;"><i class="fa-solid fa-users"></i> Inscribir Seleccionados</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JS Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <script src="js/db.js?v=5"></script>
+    <script src="js/app.js?v=17"></script>
 </body>
 </html>
