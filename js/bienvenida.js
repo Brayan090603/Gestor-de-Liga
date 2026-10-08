@@ -20,7 +20,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         if (error) {
             console.error("Error al cargar torneos:", error);
-            alert("Hubo un error al cargar los torneos. (Detalles en consola)");
+            alert("Hubo un error al cargar los torneos. Detalles: " + error.message);
         } else {
             masterList = torneosData || [];
         }
@@ -55,21 +55,23 @@ document.addEventListener("DOMContentLoaded", async () => {
                 card.style.display = 'flex';
                 card.style.justifyContent = 'space-between';
                 card.style.alignItems = 'center';
+                card.style.flexWrap = 'wrap';
+                card.style.gap = '15px';
 
                 const logoSrc = t.logo ? t.logo : 'https://cdn-icons-png.flaticon.com/512/53/53283.png';
-                const logoHtml = t.logo ? `<img src="${t.logo}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;">` : `<i class="fa-solid fa-futbol" style="font-size:30px; color:var(--accent-primary);"></i>`;
+                const logoHtml = t.logo ? `<img src="${t.logo}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;flex-shrink:0;">` : `<i class="fa-solid fa-futbol" style="font-size:30px; color:var(--accent-primary);flex-shrink:0;"></i>`;
 
                 card.innerHTML = `
-                    <div style="display:flex; align-items:center; gap:15px; text-align:left;">
+                    <div style="display:flex; align-items:center; gap:15px; text-align:left; flex: 1 1 200px; overflow: hidden;">
                         ${logoHtml}
-                        <div>
-                            <h3 style="font-size:16px; margin:0; color:var(--text-primary);">${t.nombre}</h3>
+                        <div style="overflow: hidden;">
+                            <h3 style="font-size:15px; margin:0; color:var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${t.nombre}</h3>
                             <p style="font-size:12px; margin:0; color:var(--text-secondary);">${t.tipo_torneo === 'unico' ? 'Torneo Único' : 'Torneo Dual'} - Año ${t.anio_actual}</p>
                         </div>
                     </div>
-                    <div style="display:flex; gap:10px;">
-                        <button class="btn-start-t" data-id="${t.id}" style="background:var(--accent-primary); border:none; color:#fff; padding:8px 15px; border-radius:var(--radius-md); cursor:pointer; font-weight:600;"><i class="fa-solid fa-play"></i> Continuar</button>
-                        <button class="btn-delete-t" data-id="${t.id}" style="background:transparent; border:1px solid #EF4444; color:#EF4444; padding:8px 15px; border-radius:var(--radius-md); cursor:pointer; font-weight:600;"><i class="fa-solid fa-trash"></i></button>
+                    <div style="display:flex; gap:10px; flex: 1 1 auto; justify-content: flex-end;">
+                        <button class="btn-start-t" data-id="${t.id}" style="flex:1; background:var(--accent-primary); border:none; color:#fff; padding:10px 15px; border-radius:var(--radius-md); cursor:pointer; font-weight:600;"><i class="fa-solid fa-play"></i> Continuar</button>
+                        <button class="btn-delete-t" data-id="${t.id}" style="background:transparent; border:1px solid #EF4444; color:#EF4444; padding:10px 15px; border-radius:var(--radius-md); cursor:pointer; font-weight:600;"><i class="fa-solid fa-trash"></i></button>
                     </div>
                 `;
                 tListContainer.appendChild(card);
@@ -89,7 +91,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             btn.addEventListener('click', (e) => {
                 const id = e.currentTarget.getAttribute('data-id');
                 localStorage.setItem('femfutpal_active_id', id);
-                window.location.href = 'index.html';
+                window.location.href = 'panel.html';
             });
         });
 
@@ -236,6 +238,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
 
         localStorage.setItem('femfutpal_active_id', newId.toString());
-        window.location.href = 'index.html';
+        window.location.href = 'panel.html';
     });
 });

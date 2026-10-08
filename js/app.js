@@ -22,7 +22,7 @@ const tabTitles = {
 let activeId = localStorage.getItem('femfutpal_active_id');
 
 if (!activeId) {
-    window.location.href = 'bienvenida.html';
+    window.location.href = 'index.html';
 }
 
 let appData = {
@@ -42,9 +42,13 @@ async function loadDataFromSupabase() {
     showLoader("Cargando torneo...");
 
     // 1. Cargar Torneo
-    const { data: torneosData } = await supabase.from('torneos').select('*').eq('id', activeId);
+    const { data: torneosData, error } = await supabase.from('torneos').select('*').eq('id', activeId);
+    if (error) {
+        throw new Error(error.message);
+    }
     if (!torneosData || torneosData.length === 0) {
-        window.location.href = 'bienvenida.html';
+        hideLoader();
+        window.location.href = 'index.html';
         return;
     }
     const torneo = torneosData[0];
@@ -97,13 +101,15 @@ async function loadDataFromSupabase() {
                     goles: j.stats_apertura_goles,
                     amarillas: j.stats_apertura_amarillas,
                     rojas: j.stats_apertura_rojas,
-                    golesRecibidos: j.stats_apertura_goles_recibidos
+                    golesRecibidos: j.stats_apertura_goles_recibidos,
+                    minutos: j.stats_apertura_minutos || 0
                 },
                 clausura: {
                     goles: j.stats_clausura_goles,
                     amarillas: j.stats_clausura_amarillas,
                     rojas: j.stats_clausura_rojas,
-                    golesRecibidos: j.stats_clausura_goles_recibidos
+                    golesRecibidos: j.stats_clausura_goles_recibidos,
+                    minutos: j.stats_clausura_minutos || 0
                 }
             }
         }));
@@ -125,7 +131,9 @@ async function loadDataFromSupabase() {
     // 5. Cargar Partidos (Supabase + Fallback a LocalStorage)
     const { data: partData } = await supabase.from('partidos').select('*').eq('torneo_id', activeId);
     if (partData && partData.length > 0) {
-        const rawPartidos = partData.map(p => ({
+        appData.partidos = partData
+            .filter(p => p.calendario_nombre !== '__DELETED__')
+            .map(p => ({
             id: p.id.toString(),
             torneo: p.torneo,
             fase: p.fase,
@@ -135,67 +143,46 @@ async function loadDataFromSupabase() {
             equipo2Id: p.equipo2_id,
             goles1: p.goles1,
             goles2: p.goles2,
+            calendario_nombre: p.calendario_nombre || 'Torneo Principal',
             detalles: p.detalles || {}
         }));
-
-        // Eliminar duplicados generados por clicks múltiples en versiones anteriores
-        // El ID de los partidos es un Date.now() secuencial.
-        // Encontramos el ID máximo para saber cuándo se generó el último calendario.
-        let maxId = 0;
-        rawPartidos.forEach(p => {
-            const idNum = parseInt(p.id);
-            if (!isNaN(idNum) && idNum > maxId) {
-                maxId = idNum;
-            }
-        });
-
-        // Solo conservamos los partidos que se generaron en el mismo lote (hasta 60 segundos de diferencia del último)
-        // Esto filtrará automáticamente todos los calendarios antiguos.
-        const umbralTiempo = maxId - 60000;
-        appData.partidos = rawPartidos.filter(p => {
-            const idNum = parseInt(p.id);
-            return !isNaN(idNum) && idNum >= umbralTiempo;
-        });
-
-        // Si eliminamos duplicados, guardamos la lista limpia en la base de datos automáticamente
-        if (rawPartidos.length > appData.partidos.length) {
-            console.log(`Se eliminaron ${rawPartidos.length - appData.partidos.length} partidos de calendarios antiguos.`);
-            
-            setTimeout(async () => {
-                // Intentamos borrar (puede fallar por RLS)
-                const { error } = await supabase.from('partidos').delete().eq('torneo_id', activeId);
-                
-                // Si falla el borrado, intentamos actualizar los viejos para ocultarlos (soft delete)
-                if (error) {
-                    const oldMatches = rawPartidos.filter(p => parseInt(p.id) < umbralTiempo);
-                    if (oldMatches.length > 0) {
-                        const updates = oldMatches.map(p => ({
-                            id: p.id,
-                            torneo_id: 'deleted_' + activeId
-                        }));
-                        await supabase.from('partidos').upsert(updates);
-                    }
-                }
-                
-                // Guardar los nuevos
-                savePartidosToSupabase();
-            }, 1000);
-        }
     } else {
         const localPartidos = localStorage.getItem(`femfutpal_partidos_${activeId}`);
         if (localPartidos) {
-            appData.partidos = JSON.parse(localPartidos);
+            appData.partidos = JSON.parse(localPartidos).map(p => ({
+                ...p,
+                calendario_nombre: p.calendario_nombre || 'Torneo Principal'
+            }));
             // Intentar subirlos de una vez
             if (appData.partidos.length > 0) {
                 setTimeout(savePartidosToSupabase, 2000);
             }
+        } else {
+            appData.partidos = [];
         }
     }
-    console.log("Partidos cargados en memoria:", appData.partidos.length);
-    if (appData.partidos.length === 0) {
-        alert("DIAGNOSTICO: No se encontraron partidos en la base de datos ni en la memoria local al recargar.");
+    
+    // Initialize calendars list
+    window.currentCalendarioNombre = 'Torneo Principal';
+    let uniqueCalendarios = [...new Set(appData.partidos.map(p => p.calendario_nombre))];
+    
+    // Merge with any empty calendars saved in localStorage
+    const savedCals = localStorage.getItem(`femfutpal_calendarios_${activeId}`);
+    if (savedCals) {
+        try {
+            const parsedCals = JSON.parse(savedCals);
+            parsedCals.forEach(c => {
+                if (!uniqueCalendarios.includes(c) && c !== '__DELETED__') {
+                    uniqueCalendarios.push(c);
+                }
+            });
+        } catch(e) {}
     }
+    
+    if(uniqueCalendarios.length === 0) uniqueCalendarios.push('Torneo Principal');
+    window.calendariosDisponibles = uniqueCalendarios;
 
+    console.log("Partidos cargados en memoria:", appData.partidos.length);
 
     hideLoader();
 }
@@ -247,32 +234,41 @@ async function saveData() {
             stats_apertura_amarillas: j.stats.apertura.amarillas,
             stats_apertura_rojas: j.stats.apertura.rojas,
             stats_apertura_goles_recibidos: j.stats.apertura.golesRecibidos,
+            stats_apertura_minutos: j.stats.apertura.minutos,
             stats_clausura_goles: j.stats.clausura.goles,
             stats_clausura_amarillas: j.stats.clausura.amarillas,
             stats_clausura_rojas: j.stats.clausura.rojas,
-            stats_clausura_goles_recibidos: j.stats.clausura.golesRecibidos
+            stats_clausura_goles_recibidos: j.stats.clausura.golesRecibidos,
+            stats_clausura_minutos: j.stats.clausura.minutos
         }));
         const { error } = await supabase.from('jugadores').upsert(jugData);
-        if (error && (error.message.includes('foto') || error.message.includes('dorsal'))) {
-            const jugDataSafe = appData.jugadores.map(j => ({
-                id: j.id,
-                torneo_id: activeId,
-                equipo_id: j.equipoId,
-                nombre: j.name || j.nombre,
-                is_novato: j.isNovato,
-                is_portero: j.isPortero,
-                status: j.status,
-                transferencias: j.transferencias,
-                stats_apertura_goles: j.stats.apertura.goles,
-                stats_apertura_amarillas: j.stats.apertura.amarillas,
-                stats_apertura_rojas: j.stats.apertura.rojas,
-                stats_apertura_goles_recibidos: j.stats.apertura.golesRecibidos,
-                stats_clausura_goles: j.stats.clausura.goles,
-                stats_clausura_amarillas: j.stats.clausura.amarillas,
-                stats_clausura_rojas: j.stats.clausura.rojas,
-                stats_clausura_goles_recibidos: j.stats.clausura.golesRecibidos
-            }));
-            await supabase.from('jugadores').upsert(jugDataSafe);
+        if (error) {
+            console.error("Error al guardar jugadores principal:", error);
+            try {
+                // Fallback ultra-seguro (solo las columnas más esenciales)
+                const jugDataSafe = appData.jugadores.map(j => ({
+                    id: j.id,
+                    torneo_id: activeId,
+                    equipo_id: j.equipoId === 'libre' ? null : j.equipoId,
+                    nombre: j.name || j.nombre,
+                    is_novato: j.isNovato,
+                    is_portero: j.isPortero,
+                    status: j.status,
+                    transferencias: j.transferencias,
+                    stats_apertura_goles: j.stats?.apertura?.goles || 0,
+                    stats_apertura_amarillas: j.stats?.apertura?.amarillas || 0,
+                    stats_apertura_rojas: j.stats?.apertura?.rojas || 0,
+                    stats_apertura_goles_recibidos: j.stats?.apertura?.golesRecibidos || 0,
+                    stats_clausura_goles: j.stats?.clausura?.goles || 0,
+                    stats_clausura_amarillas: j.stats?.clausura?.amarillas || 0,
+                    stats_clausura_rojas: j.stats?.clausura?.rojas || 0,
+                    stats_clausura_goles_recibidos: j.stats?.clausura?.golesRecibidos || 0
+                }));
+                const { error: error2 } = await supabase.from('jugadores').upsert(jugDataSafe);
+                if (error2) console.error("Error crítico en el fallback de jugadores:", error2);
+            } catch(e) {
+                console.error("Excepción al preparar fallback:", e);
+            }
         }
     }
 
@@ -309,6 +305,7 @@ async function savePartidosToSupabase() {
             equipo2_id: p.equipo2Id,
             goles1: p.goles1,
             goles2: p.goles2,
+            calendario_nombre: p.calendario_nombre || 'Torneo Principal',
             detalles: p.detalles || {}
         }));
 
@@ -345,9 +342,14 @@ document.addEventListener("DOMContentLoaded", async () => {
         await loadDataFromSupabase();
     } catch (e) {
         console.error("Fallo crítico de conexión:", e);
-        alert("Error de conexión a la base de datos. Si estás abriendo el archivo directamente (file:///), por favor utiliza 'Live Server' en Visual Studio Code para evitar bloqueos de seguridad del navegador.");
-        return;
+        alert("Error de conexión a la base de datos. Trabajando en modo sin conexión (si los datos estaban guardados localmente).");
+        hideLoader();
     }
+    
+    try {
+    // Initialize fallback for calendarios if loadDataFromSupabase failed
+    window.currentCalendarioNombre = window.currentCalendarioNombre || 'Torneo Principal';
+    window.calendariosDisponibles = window.calendariosDisponibles || ['Torneo Principal'];
 
     // Nav Items
     const navItems = document.querySelectorAll(".nav-item:not(#btn-open-admin):not(.external)");
@@ -368,6 +370,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     const uploadPortada = document.getElementById("upload-portada");
     const uploadLogo = document.getElementById("upload-logo");
     const detailTeamBanner = document.getElementById("detail-team-banner");
+    
+    // Scanner Elements
+    const btnScanPlantilla = document.getElementById("btn-scan-plantilla");
+    const uploadPlantillaScan = document.getElementById("upload-plantilla-scan");
+    const scannerModal = document.getElementById("scanner-modal");
+    const btnCloseScanner = document.getElementById("btn-close-scanner");
+    const scannerResultsBody = document.getElementById("scanner-results-body");
+    const btnInscribirEscaneados = document.getElementById("btn-inscribir-escaneados");
 
     if (uploadPortada) {
         uploadPortada.addEventListener("change", function () {
@@ -412,6 +422,280 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
+    // --- LÓGICA ESCÁNER OCR ---
+    if (btnScanPlantilla) {
+        btnScanPlantilla.addEventListener("click", () => {
+            if (appData.config.estadoApertura === 'finalizado' && appData.config.estadoClausura === 'finalizado') {
+                return alert("La temporada ha finalizado. No puedes añadir jugadores nuevos.");
+            }
+            uploadPlantillaScan.click();
+        });
+    }
+
+    if (btnCloseScanner) {
+        btnCloseScanner.addEventListener("click", () => {
+            scannerModal.classList.remove("active");
+            setTimeout(() => { scannerModal.style.display = "none"; }, 300);
+            uploadPlantillaScan.value = "";
+        });
+    }
+
+    let scannedPlayersState = [];
+
+    if (uploadPlantillaScan) {
+        uploadPlantillaScan.addEventListener("change", async function () {
+            const file = this.files[0];
+            if (!file) return;
+
+            // Abrimos el modal INMEDIATAMENTE para dar feedback visual asegurado
+            scannerModal.style.display = "flex";
+            setTimeout(() => scannerModal.classList.add("active"), 10);
+            scannerResultsBody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 30px;"><i class="fa-solid fa-spinner fa-spin" style="font-size: 24px; margin-bottom:10px;"></i><br>Preparando imagen...</td></tr>`;
+
+            const img = new Image();
+            const objectUrl = URL.createObjectURL(file);
+            
+            img.onload = async () => {
+                // Liberar memoria
+                URL.revokeObjectURL(objectUrl);
+                
+                // Reducir la imagen si es muy grande (previene crashes silenciosos en móviles/fotos HD)
+                const MAX_WIDTH = 1500;
+                let width = img.width;
+                let height = img.height;
+                
+                if (width > MAX_WIDTH) {
+                    height = Math.round((height * MAX_WIDTH) / width);
+                    width = MAX_WIDTH;
+                }
+                
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                
+                try {
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                    
+                    const result = await Tesseract.recognize(dataUrl, 'spa', {
+                        logger: m => {
+                            console.log(m);
+                            if(m.status === 'recognizing text'){
+                                scannerResultsBody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 30px;"><i class="fa-solid fa-microchip" style="font-size: 24px; margin-bottom:10px; color: var(--accent-primary)"></i><br>Escaneando texto: ${Math.round(m.progress * 100)}%</td></tr>`;
+                            } else {
+                                scannerResultsBody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 30px;"><i class="fa-solid fa-download" style="font-size: 24px; margin-bottom:10px;"></i><br>Descargando modelo de IA (${m.status})...</td></tr>`;
+                            }
+                        }
+                    });
+                    
+                    const text = result.data.text;
+                    console.log("Texto extraído:", text);
+                    
+                    // Procesar texto
+                    let lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 3);
+                    scannedPlayersState = [];
+                    
+                    for (const line of lines) {
+                        let rawName = line.replace(/^[0-9\.\-\_\*\#]+/, '').trim();
+                        if (rawName.length < 3) continue;
+                        
+                        let nameLower = rawName.toLowerCase();
+                        let existingPlayer = appData.jugadores.find(j => (j.nombre || "").toLowerCase() === nameLower);
+                        
+                        let status = 'nuevo';
+                        let statusText = 'Nuevo';
+                        let statusClass = 'status-nuevo';
+                        let canTransfer = false;
+                        
+                        if (existingPlayer) {
+                            if (existingPlayer.equipoId == currentTeamId) {
+                                status = 'existe_aqui';
+                                statusText = 'Ya en el equipo';
+                                statusClass = 'status-existe-aqui';
+                            } else {
+                                status = 'existe_otro';
+                                let equipo = appData.equipos.find(e => e.id == existingPlayer.equipoId);
+                                statusText = equipo ? `En ${equipo.nombre}` : 'En otro equipo';
+                                statusClass = 'status-existe-otro';
+                                canTransfer = true;
+                            }
+                        }
+                        
+                        scannedPlayersState.push({
+                            rawName: rawName,
+                            status: status,
+                            statusText: statusText,
+                            statusClass: statusClass,
+                            canTransfer: canTransfer,
+                            existingPlayer: existingPlayer
+                        });
+                    }
+                    
+                    if (scannedPlayersState.length === 0) {
+                        scannerResultsBody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 30px; color: var(--error-color)"><i class="fa-solid fa-triangle-exclamation" style="font-size: 24px; margin-bottom:10px;"></i><br>No se encontraron nombres válidos en la imagen. Intenta con otra foto.</td></tr>`;
+                        return;
+                    }
+                    
+                    scannerResultsBody.innerHTML = '';
+                    scannedPlayersState.forEach((player, index) => {
+                        const tr = document.createElement('tr');
+                        let transferHtml = '';
+                        if (player.canTransfer) {
+                            transferHtml = `<label><input type="checkbox" class="scan-transfer-check" data-index="${index}"> Sí</label>`;
+                        } else if (player.status === 'existe_aqui') {
+                            transferHtml = `<span style="color:var(--text-muted)">N/A</span>`;
+                        }
+                        
+                        tr.innerHTML = `
+                            <td><input type="text" class="scanner-input scan-name-input" data-index="${index}" value="${player.rawName}" ${player.status === 'existe_aqui' ? 'disabled' : ''}></td>
+                            <td><input type="checkbox" class="scan-novato-check" data-index="${index}" ${player.status !== 'nuevo' ? 'disabled' : ''}></td>
+                            <td><input type="checkbox" class="scan-portero-check" data-index="${index}" ${player.status !== 'nuevo' ? 'disabled' : ''}></td>
+                            <td><span class="${player.statusClass}">${player.statusText}</span></td>
+                            <td>${transferHtml}</td>
+                            <td><button class="btn-action btn-scan-remove" data-index="${index}" style="color:var(--error-color)"><i class="fa-solid fa-trash"></i></button></td>
+                        `;
+                        scannerResultsBody.appendChild(tr);
+                    });
+                    
+                    document.querySelectorAll('.btn-scan-remove').forEach(btn => {
+                        btn.addEventListener('click', (e) => {
+                            e.target.closest('tr').remove();
+                        });
+                    });
+                    
+                } catch (err) {
+                    console.error("Error en OCR:", err);
+                    scannerResultsBody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 30px; color: var(--error-color)"><i class="fa-solid fa-triangle-exclamation" style="font-size: 24px; margin-bottom:10px;"></i><br>Hubo un error al procesar la imagen: ${err.message}</td></tr>`;
+                }
+            };
+            
+            img.onerror = () => {
+                scannerResultsBody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 30px; color: var(--error-color)"><i class="fa-solid fa-triangle-exclamation" style="font-size: 24px; margin-bottom:10px;"></i><br>Error al leer el archivo de imagen.</td></tr>`;
+            };
+            
+            img.src = objectUrl;
+            this.value = '';
+        });
+    }
+
+    if (btnInscribirEscaneados) {
+        btnInscribirEscaneados.addEventListener("click", async () => {
+            const rows = scannerResultsBody.querySelectorAll('tr');
+            if (rows.length === 0) return alert("No hay jugadores para inscribir.");
+            
+            showLoader("Inscribiendo jugadores...");
+            let addedCount = 0;
+            let transferCount = 0;
+            
+            const teamPlayers = appData.jugadores.filter(j => j.equipoId == currentTeamId);
+            let totalPlantilla = teamPlayers.length;
+            
+            for (const tr of rows) {
+                if (totalPlantilla >= 22) {
+                    alert(`Límite alcanzado (22). Se inscribieron/traspasaron ${addedCount + transferCount} jugadores.`);
+                    break;
+                }
+                
+                const nameInput = tr.querySelector('.scan-name-input');
+                if (!nameInput) continue;
+                
+                const index = nameInput.dataset.index;
+                const playerState = scannedPlayersState[index];
+                const finalName = nameInput.value.trim();
+                if (!finalName) continue;
+                if (playerState.status === 'existe_aqui') continue;
+                
+                if (playerState.status === 'existe_otro') {
+                    const transferCheck = tr.querySelector('.scan-transfer-check');
+                    if (transferCheck && transferCheck.checked) {
+                        if (playerState.existingPlayer.transferencias >= 2) {
+                            console.log(`Jugador ${finalName} no puede ser traspasado (límite 2).`);
+                            continue;
+                        }
+                        const oldTeamId = playerState.existingPlayer.equipoId;
+                        const { error } = await supabase.from('jugadores')
+                            .update({ equipo_id: currentTeamId, transferencias: playerState.existingPlayer.transferencias + 1 })
+                            .eq('id', playerState.existingPlayer.id);
+                            
+                        if (!error) {
+                            playerState.existingPlayer.equipoId = currentTeamId;
+                            playerState.existingPlayer.transferencias += 1;
+                            
+                            const { data: movData } = await supabase.from('movimientos').insert([{
+                                torneo_id: activeId,
+                                jugador_id: playerState.existingPlayer.id,
+                                tipo: 'traspaso',
+                                equipo_origen_id: oldTeamId,
+                                equipo_destino_id: currentTeamId,
+                                fecha: new Date().toISOString()
+                            }]).select();
+                            
+                            if (movData) appData.movimientos.push(movData[0]);
+                            transferCount++;
+                            totalPlantilla++;
+                        }
+                    }
+                    continue;
+                }
+                
+                if (playerState.status === 'nuevo') {
+                    const isNovato = tr.querySelector('.scan-novato-check').checked;
+                    const isPortero = tr.querySelector('.scan-portero-check').checked;
+                    
+                    const { data, error } = await supabase.from('jugadores').insert([{
+                        torneo_id: activeId,
+                        equipo_id: currentTeamId,
+                        nombre: finalName,
+                        is_novato: isNovato,
+                        is_portero: isPortero,
+                        status: 'activo',
+                        transferencias: 0
+                    }]).select();
+                    
+                    if (!error && data && data.length > 0) {
+                        const j = data[0];
+                        appData.jugadores.push({
+                            id: j.id.toString(),
+                            equipoId: j.equipo_id.toString(),
+                            nombre: j.nombre,
+                            name: j.nombre,
+                            isNovato: j.is_novato,
+                            isPortero: j.is_portero,
+                            status: j.status,
+                            transferencias: j.transferencias,
+                            stats: {
+                                apertura: { goles: 0, amarillas: 0, rojas: 0, golesRecibidos: 0 },
+                                clausura: { goles: 0, amarillas: 0, rojas: 0, golesRecibidos: 0 }
+                            }
+                        });
+                        
+                        const { data: movData } = await supabase.from('movimientos').insert([{
+                            torneo_id: activeId,
+                            jugador_id: j.id,
+                            tipo: 'alta',
+                            equipo_destino_id: currentTeamId,
+                            fecha: new Date().toISOString()
+                        }]).select();
+                        if (movData) appData.movimientos.push(movData[0]);
+                        
+                        addedCount++;
+                        totalPlantilla++;
+                    }
+                }
+            }
+            
+            hideLoader();
+            scannerModal.style.display = "none";
+            alert(`Proceso finalizado. Nuevos: ${addedCount}. Traspasos: ${transferCount}.`);
+            
+            renderTeamDetail(currentTeamId);
+            updateSelects();
+            renderMercado();
+        });
+    }
+    // --- FIN LÓGICA ESCÁNER OCR ---
+    
     // Elements - Mercado
     const altasBody = document.getElementById("altas-body");
     const bajasBody = document.getElementById("bajas-body");
@@ -423,6 +707,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Elements - Stats
     const tableBody = document.getElementById("table-body");
+    const theadTr = document.querySelector("#view-stats thead tr");
+    const tableContainer = document.querySelector("#view-stats .table-container");
+
     const topPlayerName = document.getElementById("top-player-name");
     const topPlayerStat = document.getElementById("top-player-stat");
     const statColumnHeader = document.getElementById("stat-column-header");
@@ -460,6 +747,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             window.location.reload();
         });
     }
+
+    // Removed magic import logic
 
     // Forms
     const formNewTeam = document.getElementById("form-new-team");
@@ -600,8 +889,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     renderInicio();
     renderTeams();
     updateSelects();
-    renderPartidosGenerados();
-    renderTablaPosiciones();
+    updateCalendarioUI();
 
     function applyTorneoMode() {
         const tBtns = document.querySelector(".tournament-selector");
@@ -697,8 +985,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                             appData.jugadores.forEach(p => {
                                 p.transferencias = 0;
                                 p.stats = {
-                                    apertura: { goles: 0, amarillas: 0, rojas: 0, golesRecibidos: 0 },
-                                    clausura: { goles: 0, amarillas: 0, rojas: 0, golesRecibidos: 0 }
+                                    apertura: { goles: 0, amarillas: 0, rojas: 0, golesRecibidos: 0, minutos: 0 },
+                                    clausura: { goles: 0, amarillas: 0, rojas: 0, golesRecibidos: 0, minutos: 0 }
                                 };
                             });
                             appData.movimientos = [];
@@ -737,11 +1025,17 @@ document.addEventListener("DOMContentLoaded", async () => {
                     if (!confirm("¿Estás seguro de que deseas FINALIZAR EL CLAUSURA? \n\nEsto finalizará toda la temporada. No podrás editar más estadísticas ni movimientos hasta iniciar la próxima temporada.")) return;
 
                     config.estadoClausura = 'finalizado';
+                    
+                    // Limpiar movimientos al finalizar la temporada
+                    appData.movimientos = [];
+                    
                     saveData();
                     updateSeasonBtn();
                     updateFinishedBanner();
                     if (currentTeamId) showTeamDetail(appData.equipos.find(t => t.id === currentTeamId));
-                    alert("Temporada Finalizada. Modo de solo lectura activado.");
+                    if (document.getElementById("view-mercado").classList.contains("active")) renderMercado();
+                    
+                    alert("Temporada Finalizada. Modo de solo lectura activado y se ha limpiado el mercado de transferencias para la próxima temporada.");
 
                 } else if (config.estadoApertura === 'finalizado' && config.estadoClausura === 'finalizado') {
                     let nuevoAnio = prompt(`¿Qué año deseas para la nueva temporada?`, config.anioActual + 1);
@@ -756,8 +1050,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                             appData.jugadores.forEach(p => {
                                 p.transferencias = 0;
                                 p.stats = {
-                                    apertura: { goles: 0, amarillas: 0, rojas: 0, golesRecibidos: 0 },
-                                    clausura: { goles: 0, amarillas: 0, rojas: 0, golesRecibidos: 0 }
+                                    apertura: { goles: 0, amarillas: 0, rojas: 0, golesRecibidos: 0, minutos: 0 },
+                                    clausura: { goles: 0, amarillas: 0, rojas: 0, golesRecibidos: 0, minutos: 0 }
                                 };
                             });
                             appData.movimientos = [];
@@ -813,11 +1107,16 @@ document.addEventListener("DOMContentLoaded", async () => {
                 document.getElementById("view-mercado").classList.add("active");
                 currentTabTitle.textContent = "Mercado de Jugadores";
                 renderMercado();
+            } else if (viewTarget === 'inactivos') {
+                if (logoContainer) logoContainer.style.display = 'flex';
+                document.getElementById("view-inactivos").classList.add("active");
+                currentTabTitle.textContent = "Agentes Libres e Inactivos";
+                renderInactivos();
             } else if (viewTarget === 'sorteos') {
                 if (logoContainer) logoContainer.style.display = 'flex';
                 document.getElementById("view-sorteos").classList.add("active");
                 currentTabTitle.textContent = "Sorteos y Emparejamientos";
-                renderPartidosGenerados();
+                updateCalendarioUI();
             } else if (viewTarget === 'posiciones') {
                 if (logoContainer) logoContainer.style.display = 'flex';
                 document.getElementById("view-posiciones").classList.add("active");
@@ -1140,8 +1439,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                 transferencias: 0,
                 foto: photoDataUrl || '',
                 stats: {
-                    apertura: { goles: 0, amarillas: 0, rojas: 0, golesRecibidos: 0 },
-                    clausura: { goles: 0, amarillas: 0, rojas: 0, golesRecibidos: 0 }
+                    apertura: { goles: 0, amarillas: 0, rojas: 0, golesRecibidos: 0, minutos: 0 },
+                    clausura: { goles: 0, amarillas: 0, rojas: 0, golesRecibidos: 0, minutos: 0 }
                 }
             });
 
@@ -1243,51 +1542,163 @@ document.addEventListener("DOMContentLoaded", async () => {
         handleBaja(playerId);
     });
 
+    // UI de Calendarios
+    function updateCalendarioUI() {
+        window.manualCalendars = window.manualCalendars || [];
+        const sel = document.getElementById("calendario-selector");
+        if (sel) {
+            sel.innerHTML = window.calendariosDisponibles.map(c => `<option value="${c}" ${c === window.currentCalendarioNombre ? 'selected' : ''}>${c}</option>`).join('');
+        }
+        
+        // Save available calendars to localStorage to persist empty ones
+        localStorage.setItem(`femfutpal_calendarios_${activeId}`, JSON.stringify(window.calendariosDisponibles));
+
+        const matchesInCurrent = appData.partidos.filter(p => p.torneo === currentTorneo && p.calendario_nombre === window.currentCalendarioNombre);
+        
+        const isManual = window.manualCalendars.includes(window.currentCalendarioNombre);
+
+        const panelGenerar = document.getElementById("panel-generar-calendario");
+        const panelFase = document.getElementById("panel-agregar-fase");
+
+        if (matchesInCurrent.length > 0 || isManual) {
+            if(panelGenerar) panelGenerar.style.display = 'none';
+            if(panelFase) panelFase.style.display = 'block';
+        } else {
+            if(panelGenerar) panelGenerar.style.display = 'block';
+            if(panelFase) panelFase.style.display = 'none';
+        }
+
+        renderPartidosGenerados();
+        renderTablaPosiciones();
+    }
+    
+    window.startManualCalendar = function() {
+        window.manualCalendars = window.manualCalendars || [];
+        if (!window.manualCalendars.includes(window.currentCalendarioNombre)) {
+            window.manualCalendars.push(window.currentCalendarioNombre);
+        }
+        updateCalendarioUI();
+    };
+
+    const selCalendario = document.getElementById("calendario-selector");
+    if(selCalendario) {
+        selCalendario.addEventListener("change", (e) => {
+            window.currentCalendarioNombre = e.target.value;
+            window.currentJornadaTab = null; // Reset tab on change
+            updateCalendarioUI();
+        });
+    }
+
+    const btnNuevoCalendario = document.getElementById("btn-nuevo-calendario");
+    if (btnNuevoCalendario) {
+        btnNuevoCalendario.addEventListener("click", () => {
+            const nombre = prompt("Ingresa el nombre para el nuevo calendario (Ej: Liguilla, 2º Fase):");
+            if (nombre && nombre.trim() !== "") {
+                const trimNombre = nombre.trim();
+                if (!window.calendariosDisponibles.includes(trimNombre)) {
+                    window.calendariosDisponibles.push(trimNombre);
+                }
+                window.currentCalendarioNombre = trimNombre;
+                window.currentJornadaTab = null;
+                updateCalendarioUI();
+            }
+        });
+    }
+
+    const btnEliminarCalendario = document.getElementById("btn-eliminar-calendario");
+    if (btnEliminarCalendario) {
+        btnEliminarCalendario.addEventListener("click", async () => {
+            if (window.calendariosDisponibles.length <= 1 && appData.partidos.filter(p=>p.calendario_nombre === window.currentCalendarioNombre).length === 0) {
+                return alert("No se puede eliminar el único calendario base si ya está vacío.");
+            }
+            if (confirm(`¿Estás seguro de eliminar todo el calendario "${window.currentCalendarioNombre}"?`)) {
+                showLoader("Eliminando calendario...");
+                const calToDelete = window.currentCalendarioNombre;
+                
+                // Filter memory
+                appData.partidos = appData.partidos.filter(p => !(p.torneo === currentTorneo && p.calendario_nombre === calToDelete));
+                
+                // Set default
+                window.calendariosDisponibles = window.calendariosDisponibles.filter(c => c !== calToDelete);
+                if(window.calendariosDisponibles.length === 0) window.calendariosDisponibles.push("Torneo Principal");
+                window.currentCalendarioNombre = window.calendariosDisponibles[0];
+                
+                // Soft delete in Supabase (because RLS blocks DELETE commands)
+                const { error: delError } = await supabase.from('partidos').update({ calendario_nombre: '__DELETED__' })
+                    .eq('torneo_id', activeId)
+                    .eq('calendario_nombre', calToDelete);
+                
+                if (delError) {
+                    console.error("Error soft-deleting calendar from Supabase:", delError);
+                }
+
+                await savePartidosToSupabase();
+                updateCalendarioUI();
+                hideLoader();
+            }
+        });
+    }
+
     // 6. Generador de Sorteos / Partidos
     if (formGenerarSorteo) {
         const sorteoFaseSelect = document.getElementById("sorteo-fase");
         const grupoNumContainer = document.getElementById("grupo-num-container");
+        const elimClasifContainer = document.getElementById("eliminatoria-top-container");
 
-        sorteoFaseSelect.addEventListener("change", () => {
-            if (sorteoFaseSelect.value === 'grupos') {
-                grupoNumContainer.style.display = 'block';
-            } else {
-                grupoNumContainer.style.display = 'none';
-            }
-        });
+        if (sorteoFaseSelect) {
+            sorteoFaseSelect.addEventListener("change", () => {
+                if (sorteoFaseSelect.value === 'grupos') {
+                    if (grupoNumContainer) grupoNumContainer.style.display = 'block';
+                    if (elimClasifContainer) elimClasifContainer.style.display = 'none';
+                } else if (sorteoFaseSelect.value === 'eliminatorias_clasificacion') {
+                    if (grupoNumContainer) grupoNumContainer.style.display = 'none';
+                    if (elimClasifContainer) elimClasifContainer.style.display = 'block';
+                } else {
+                    if (grupoNumContainer) grupoNumContainer.style.display = 'none';
+                    if (elimClasifContainer) elimClasifContainer.style.display = 'none';
+                }
+            });
+        }
 
         formGenerarSorteo.addEventListener("submit", async (e) => {
             e.preventDefault();
 
-            const fase = document.getElementById("sorteo-fase").value; // grupos | eliminatorias
+            const fase = document.getElementById("sorteo-fase").value; // liga | grupos | eliminatorias | eliminatorias_clasificacion
             const formato = document.getElementById("sorteo-formato").value; // ida | idayvuelta
 
             if (appData.equipos.length < 2) {
                 return alert("Necesitas al menos 2 equipos registrados para generar un sorteo.");
             }
 
-            // Confirm before overwrite
-            if (appData.partidos.filter(p => p.torneo === currentTorneo).length > 0) {
-                if (!confirm("Ya tienes partidos generados para este torneo en la memoria local. ¿Deseas borrarlos y generar un NUEVO sorteo/calendario? (Se perderán los resultados)")) return;
+            const isEliminatoria = fase.startsWith('eliminatorias');
+
+            // Buscar si ya hay partidos en este calendario
+            const partidosExistentes = appData.partidos.filter(p => p.torneo === currentTorneo && p.calendario_nombre === window.currentCalendarioNombre);
+            
+            if (partidosExistentes.length > 0) {
+                // Filtrar partidos del mismo tipo (eliminatoria o regular)
+                const partidosMismoTipo = partidosExistentes.filter(p => isEliminatoria ? p.fase.startsWith('eliminatoria') : (p.fase === 'liga' || p.fase === 'grupos'));
+                
+                if (partidosMismoTipo.length > 0) {
+                    const tipoNombre = isEliminatoria ? "llaves eliminatorias" : "partidos regulares (liga/grupos)";
+                    if (!confirm(`Ya hay ${tipoNombre} en el calendario "${window.currentCalendarioNombre}". ¿Borrar y sobreescribir esta fase?`)) return;
+                    
+                    // Solo borramos los del mismo tipo, preservando los demás
+                    appData.partidos = appData.partidos.filter(p => {
+                        if (p.torneo === currentTorneo && p.calendario_nombre === window.currentCalendarioNombre) {
+                            const pIsEliminatoria = p.fase.startsWith('eliminatoria');
+                            return pIsEliminatoria !== isEliminatoria; // Conservar solo si es de distinto tipo
+                        }
+                        return true;
+                    });
+                }
             }
 
-            showLoader("Generando nuevo calendario...");
-
-            // Borrar partidos actuales del torneo de Supabase para evitar duplicados
-            const { error: deleteError } = await supabase.from('partidos').delete().eq('torneo_id', activeId);
-            if (deleteError) {
-                console.error("Error al borrar partidos antiguos:", deleteError);
-                alert("Hubo un problema borrando los partidos antiguos en la base de datos. Verifica los permisos (RLS) en Supabase para la tabla 'partidos'. Error: " + deleteError.message);
-            }
-
-            // Vaciar partidos actuales del torneo en memoria
-            appData.partidos = appData.partidos.filter(p => p.torneo !== currentTorneo);
+            showLoader(`Generando calendario en ${window.currentCalendarioNombre}...`);
             let equiposActivos = [...appData.equipos].sort(() => Math.random() - 0.5);
-
             let idCounter = Date.now();
 
             if (fase === 'liga') {
-                // Liga Única (Todos contra Todos)
                 let equiposLiga = [...equiposActivos];
                 if (equiposLiga.length % 2 !== 0) {
                     equiposLiga.push({ id: 'vacante', nombre: 'VACANTE (Descansa)', logo: '' });
@@ -1305,6 +1716,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                         appData.partidos.push({
                             id: (idCounter++).toString(),
                             torneo: currentTorneo,
+                            calendario_nombre: window.currentCalendarioNombre,
                             fase: 'liga',
                             jornada: r + 1,
                             equipo1Id: local.id,
@@ -1318,6 +1730,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                             appData.partidos.push({
                                 id: (idCounter++).toString(),
                                 torneo: currentTorneo,
+                                calendario_nombre: window.currentCalendarioNombre,
                                 fase: 'liga',
                                 jornada: r + 1 + jornadas,
                                 equipo1Id: visitante.id,
@@ -1332,11 +1745,9 @@ document.addEventListener("DOMContentLoaded", async () => {
                 }
 
             } else if (fase === 'grupos') {
-                // Fase de Grupos
                 const numGrupos = parseInt(document.getElementById("sorteo-grupos-num").value) || 2;
                 if (numGrupos < 2 || numGrupos > 8) return alert("El número de grupos debe estar entre 2 y 8.");
 
-                // Dividir en grupos
                 const letras = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
                 const grupos = Array.from({ length: numGrupos }, () => []);
 
@@ -1364,6 +1775,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                             appData.partidos.push({
                                 id: (idCounter++).toString(),
                                 torneo: currentTorneo,
+                                calendario_nombre: window.currentCalendarioNombre,
                                 fase: 'grupos',
                                 jornada: r + 1,
                                 equipo1Id: local.id,
@@ -1377,6 +1789,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                                 appData.partidos.push({
                                     id: (idCounter++).toString(),
                                     torneo: currentTorneo,
+                                    calendario_nombre: window.currentCalendarioNombre,
                                     fase: 'grupos',
                                     jornada: r + 1 + jornadas,
                                     equipo1Id: visitante.id,
@@ -1392,7 +1805,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                 });
 
             } else if (fase === 'eliminatorias') {
-                // Emparejamientos directos aleatorios
                 let i = 0;
                 let partidoCount = 1;
                 while (i < equiposActivos.length) {
@@ -1402,40 +1814,136 @@ document.addEventListener("DOMContentLoaded", async () => {
                     appData.partidos.push({
                         id: (idCounter++).toString(),
                         torneo: currentTorneo,
+                        calendario_nombre: window.currentCalendarioNombre,
                         fase: 'eliminatoria',
-                        jornada: 1, // Jornada única de eliminatoria actual
+                        jornada: 1,
                         equipo1Id: local.id,
                         equipo2Id: visitante.id,
                         goles1: null,
                         goles2: null,
-                        grupo: `Partido ${partidoCount}`
+                        grupo: `Llave ${partidoCount}`
                     });
 
                     if (formato === 'idayvuelta' && visitante.id !== 'vacante') {
                         appData.partidos.push({
                             id: (idCounter++).toString(),
                             torneo: currentTorneo,
+                            calendario_nombre: window.currentCalendarioNombre,
                             fase: 'eliminatoria',
-                            jornada: 2, // Vuelta
+                            jornada: 2,
                             equipo1Id: visitante.id,
                             equipo2Id: local.id,
                             goles1: null,
                             goles2: null,
-                            grupo: `Partido ${partidoCount}`
+                            grupo: `Llave ${partidoCount}`
                         });
                     }
                     partidoCount++;
                     i += 2;
                 }
+            } else if (fase === 'eliminatorias_clasificacion') {
+                const clasificadosCount = parseInt(document.getElementById("sorteo-top-num").value) || 8;
+                const tabla = getTablaDePosicionesArray();
+                
+                if (tabla.length < clasificadosCount) {
+                    hideLoader();
+                    return alert(`No hay suficientes equipos en la tabla de posiciones anterior. Tienes ${tabla.length} y quieres clasificar ${clasificadosCount}.`);
+                }
+
+                const clasificados = tabla.slice(0, clasificadosCount).map(t => t.equipo);
+                let llaveCount = 1;
+                for (let i = 0; i < clasificadosCount / 2; i++) {
+                    const local = clasificados[i];
+                    const visitante = clasificados[clasificadosCount - 1 - i];
+
+                    appData.partidos.push({
+                        id: (idCounter++).toString(),
+                        torneo: currentTorneo,
+                        calendario_nombre: window.currentCalendarioNombre,
+                        fase: 'eliminatoria',
+                        jornada: 1,
+                        equipo1Id: local.id,
+                        equipo2Id: visitante.id,
+                        goles1: null,
+                        goles2: null,
+                        grupo: `Llave ${llaveCount} (${i+1}º vs ${clasificadosCount-i}º)`
+                    });
+
+                    if (formato === 'idayvuelta') {
+                        appData.partidos.push({
+                            id: (idCounter++).toString(),
+                            torneo: currentTorneo,
+                            calendario_nombre: window.currentCalendarioNombre,
+                            fase: 'eliminatoria',
+                            jornada: 2,
+                            equipo1Id: visitante.id,
+                            equipo2Id: local.id,
+                            goles1: null,
+                            goles2: null,
+                            grupo: `Llave ${llaveCount} (${i+1}º vs ${clasificadosCount-i}º)`
+                        });
+                    }
+                    llaveCount++;
+                }
             }
+
             hideLoader();
-            savePartidosToSupabase();
-            renderPartidosGenerados();
-            renderTablaPosiciones();
+            await savePartidosToSupabase();
+            updateCalendarioUI();
 
             setTimeout(() => {
                 sorteoResultadosSection.scrollIntoView({ behavior: 'smooth' });
             }, 100);
+        });
+    }
+
+    const btnAgregarVuelta = document.getElementById("btn-agregar-vuelta");
+    if(btnAgregarVuelta) {
+        btnAgregarVuelta.addEventListener("click", async () => {
+            if(!confirm("¿Agregar una nueva vuelta invertida basada en los partidos existentes de este calendario?")) return;
+            const matchesInCurrent = appData.partidos.filter(p => p.torneo === currentTorneo && p.calendario_nombre === window.currentCalendarioNombre);
+            
+            let maxJornada = 0;
+            matchesInCurrent.forEach(p => { if(p.jornada > maxJornada) maxJornada = p.jornada; });
+            
+            // Replicar partidos de la 1er vuelta pero invirtiendo local/visitante
+            const matchesPrimeraVuelta = matchesInCurrent.filter(p => p.jornada <= (maxJornada/2 || maxJornada)); // Aproximación
+            let idCounter = Date.now();
+            
+            matchesPrimeraVuelta.forEach(p => {
+                appData.partidos.push({
+                    id: (idCounter++).toString(),
+                    torneo: currentTorneo,
+                    calendario_nombre: window.currentCalendarioNombre,
+                    fase: p.fase,
+                    jornada: p.jornada + maxJornada,
+                    equipo1Id: p.equipo2Id, // INVERTIDOS
+                    equipo2Id: p.equipo1Id,
+                    goles1: null,
+                    goles2: null,
+                    grupo: p.grupo
+                });
+            });
+
+            await savePartidosToSupabase();
+            updateCalendarioUI();
+        });
+    }
+
+    const btnCrearLlavesFase = document.getElementById("btn-crear-llaves-fase");
+    if (btnCrearLlavesFase) {
+        btnCrearLlavesFase.addEventListener("click", () => {
+            // Activa el panel superior con la opción de eliminatorias por clasificación
+            const panelGenerar = document.getElementById("panel-generar-calendario");
+            if (panelGenerar) {
+                panelGenerar.style.display = 'block';
+                const sorteoFaseSelect = document.getElementById("sorteo-fase");
+                if (sorteoFaseSelect) {
+                    sorteoFaseSelect.value = "eliminatorias_clasificacion";
+                    sorteoFaseSelect.dispatchEvent(new Event("change"));
+                }
+                document.querySelector(".tools-panel").scrollIntoView({ behavior: 'smooth' });
+            }
         });
     }
 
@@ -1472,12 +1980,85 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
+    window.activeFaseTab = window.activeFaseTab || 'liga';
+
+    // Manejador global para las tabs de fase (se asignan una vez si no están)
+    if (!window.faseTabsInit) {
+        document.addEventListener('click', (e) => {
+            if (e.target.id === 'tab-fase-liga') {
+                window.activeFaseTab = 'liga';
+                renderPartidosGenerados();
+            } else if (e.target.id === 'tab-fase-llaves') {
+                window.activeFaseTab = 'llaves';
+                renderPartidosGenerados();
+            }
+        });
+        window.faseTabsInit = true;
+    }
+
     function renderPartidosGenerados() {
         if (!sorteoResultadosContainer) return;
 
-        const partidos = appData.partidos.filter(p => p.torneo === currentTorneo);
-        if (partidos.length === 0) {
-            sorteoResultadosContainer.innerHTML = `<p style="text-align:center; color: var(--text-muted); font-size: 14px;">No hay partidos generados en este torneo. ¡Utiliza el panel superior para generar tu liga!</p>`;
+        let todosPartidos = appData.partidos.filter(p => p.torneo === currentTorneo && p.calendario_nombre === window.currentCalendarioNombre);
+        
+        const tieneLiga = todosPartidos.some(p => p.fase === 'liga' || p.fase === 'grupos');
+        const tieneLlaves = todosPartidos.some(p => p.fase === 'eliminatoria' || p.fase.startsWith('eliminatorias'));
+
+        const sorteoFaseTabs = document.getElementById("sorteo-fase-tabs");
+        const tabLigaBtn = document.getElementById("tab-fase-liga");
+        const tabLlavesBtn = document.getElementById("tab-fase-llaves");
+
+        if (sorteoFaseTabs) {
+            if (tieneLiga && tieneLlaves) {
+                sorteoFaseTabs.style.display = "flex";
+                if (window.activeFaseTab === 'liga') {
+                    tabLigaBtn.className = "btn-primary";
+                    tabLigaBtn.style.background = "";
+                    tabLigaBtn.style.color = "";
+                    tabLlavesBtn.className = "btn-secondary";
+                    tabLlavesBtn.style.background = "transparent";
+                    tabLlavesBtn.style.color = "var(--text-secondary)";
+                } else {
+                    tabLlavesBtn.className = "btn-primary";
+                    tabLlavesBtn.style.background = "";
+                    tabLlavesBtn.style.color = "";
+                    tabLigaBtn.className = "btn-secondary";
+                    tabLigaBtn.style.background = "transparent";
+                    tabLigaBtn.style.color = "var(--text-secondary)";
+                }
+            } else {
+                sorteoFaseTabs.style.display = "none";
+                if (tieneLiga) window.activeFaseTab = 'liga';
+                else if (tieneLlaves) window.activeFaseTab = 'llaves';
+            }
+        }
+
+        if (todosPartidos.length === 0) {
+            let emptyHtml = `<div class="jornadas-tabs" style="margin-bottom: 20px;">`;
+            emptyHtml += `<button class="btn-jornada-tab" id="btn-open-opciones-fecha" style="padding: 8px 12px; background: #334155; color: white; border-radius: 8px;"><i class="fa-solid fa-plus"></i></button>`;
+            emptyHtml += `</div>`;
+            emptyHtml += `<p style="text-align:center; color: var(--text-muted); font-size: 14px;">El calendario está vacío. Haz clic en el botón '+' de arriba para empezar a agregar partidos manualmente.</p>`;
+            sorteoResultadosContainer.innerHTML = emptyHtml;
+            
+            const btnOpenOpciones = document.getElementById("btn-open-opciones-fecha");
+            if (btnOpenOpciones) {
+                btnOpenOpciones.addEventListener("click", () => {
+                    document.getElementById("modal-opciones-fecha").classList.add('active');
+                });
+            }
+            return;
+        }
+
+        let partidos = todosPartidos.filter(p => {
+            if (window.activeFaseTab === 'liga') return p.fase === 'liga' || p.fase === 'grupos';
+            return p.fase === 'eliminatoria' || p.fase.startsWith('eliminatorias');
+        });
+
+        // Check if current view is eliminatoria
+        if (window.activeFaseTab === 'llaves' && partidos.length > 0) {
+            sorteoResultadosContainer.innerHTML = renderBracketView();
+            if (sorteoResultadosSection) sorteoResultadosSection.style.display = "block";
+            attachBracketEvents();
             return;
         }
 
@@ -1521,19 +2102,21 @@ document.addEventListener("DOMContentLoaded", async () => {
         html += `<div class="jornada-matches">`;
         html += `<h4 style="margin: 0 0 15px 0; color: var(--accent-primary); border-bottom: 1px solid var(--border-color); padding-bottom: 5px;">${jornadaName.replace(/Jornada\s(\d+)/, "$1º Fecha")}</h4>`;
 
-        partidosPorJornada[jornadaName].forEach(p => {
+        partidosPorJornada[jornadaName].forEach((p, index) => {
             const local = p.equipo1Id === 'vacante' ? { id: 'vacante', nombre: 'VACANTE (Descansa)', logo: '' } : appData.equipos.find(e => e.id === p.equipo1Id) || { nombre: 'Equipo Desconocido' };
             const visitante = p.equipo2Id === 'vacante' ? { id: 'vacante', nombre: 'VACANTE (Descansa)', logo: '' } : appData.equipos.find(e => e.id === p.equipo2Id) || { nombre: 'Equipo Desconocido' };
 
             const isVacante = local.id === 'vacante' || visitante.id === 'vacante';
 
             let inputArea = "";
+            let isFinalizado = false;
             if (!isVacante) {
                 const g1Val = p.goles1 !== null ? p.goles1 : "";
                 const g2Val = p.goles2 !== null ? p.goles2 : "";
 
                 let scoreDisplay = "";
-                if ((p.detalles && p.detalles.estado === 'finalizado') || (p.goles1 !== null && p.goles2 !== null)) {
+                if ((p.detalles && p.detalles.estado === 'finalizado') || (p.goles1 !== null && p.goles2 !== null && p.goles1 !== "" && p.goles2 !== "")) {
+                    isFinalizado = true;
                     scoreDisplay = `<div style="font-size: 1.5rem; font-weight: 800; color: white; margin-top: 5px;">${p.goles1 || 0} - ${p.goles2 || 0}</div>`;
                 }
                 inputArea = scoreDisplay;
@@ -1549,31 +2132,65 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             const badgeHtml = (p.fase === 'grupos' && p.grupo) ? `<div style="text-align:center; margin-bottom:5px;"><span class="team-badge" style="background:var(--accent-primary);color:var(--bg-primary);">${p.grupo}</span></div>` : '';
 
-            html += `
-            <div class="match-card fade-in">
-                <div class="${localClasses}">
-                    ${localImg}
-                    <span>${local.nombre || local.name}</span>
-                </div>
-
-                <div style="display:flex; flex-direction:column; align-items:center;">
-                    ${badgeHtml}
-                    <div class="match-vs">VS</div>
-                    ${inputArea}
-                    ${(local.id !== 'vacante' && visitante.id !== 'vacante') ? `
+            let actionButtons = '';
+            if (local.id !== 'vacante' && visitante.id !== 'vacante') {
+                if (isFinalizado) {
+                    actionButtons = `
                         <div style="display:flex; gap: 5px; margin-top:5px;">
-                            <button class="btn-primary btn-fast-result" data-match-id="${p.id}" style="font-size:0.75rem; padding: 4px 10px; border-radius:15px; background: #3b82f6;"><i class="fa-solid fa-pen"></i> Resultado</button>
-                            <button class="btn-primary btn-manage-match" data-match-id="${p.id}" style="font-size:0.75rem; padding: 4px 10px; border-radius:15px; background: #10b981;"><i class="fa-solid fa-gamepad"></i> En vivo</button>
+                            <button class="btn-primary btn-fast-result" data-match-id="${p.id}" style="font-size:0.75rem; padding: 4px 10px; border-radius:15px; background: #3b82f6;"><i class="fa-solid fa-pen"></i> Editar</button>
+                            <span style="font-size:0.75rem; padding: 4px 10px; border-radius:15px; background: rgba(0, 0, 0, 0.1); color: var(--text-muted); display:flex; align-items:center; gap:5px;"><i class="fa-solid fa-flag-checkered"></i> Final</span>
                         </div>
-                    ` : ''}
-                </div>
+                    `;
+                } else {
+                    actionButtons = `
+                        <div style="display:flex; gap: 5px; margin-top:5px;" onclick="event.stopPropagation()">
+                            <button class="btn-primary btn-fast-result" data-match-id="${p.id}" style="font-size:0.75rem; padding: 4px 10px; border-radius:15px; background: #3b82f6;"><i class="fa-solid fa-pen"></i> Res</button>
+                            <button class="btn-primary btn-manage-match" data-match-id="${p.id}" style="font-size:0.75rem; padding: 4px 10px; border-radius:15px; background: #10b981;"><i class="fa-solid fa-gamepad"></i> Vivo</button>
+                        </div>
+                    `;
+                }
+            }
 
-                <div class="${visClasses}">
-                    ${visImg}
-                    <span>${visitante.nombre || visitante.name}</span>
+            let centerVsHtml = '';
+            if (isFinalizado) {
+                centerVsHtml = `<div style="font-size: 1.5rem; font-weight: 800; color: white; margin: 10px 0;">${p.goles1 || 0} - ${p.goles2 || 0}</div>`;
+            } else {
+                centerVsHtml = `<div class="match-vs"><div class="dots"><span></span><span></span></div></div>`;
+            }
+            
+            // Si el partido tiene fecha y hora asignadas
+            let dateTimeHtml = '';
+            if (!isVacante && p.detalles && (p.detalles.fecha || p.detalles.hora)) {
+                let dt = [];
+                if(p.detalles.fecha) dt.push(p.detalles.fecha);
+                if(p.detalles.hora) dt.push(p.detalles.hora);
+                dateTimeHtml = `<div class="match-datetime-info">${dt.join(' | ')}</div>`;
+            }
+
+            const matchCardHtml = `
+                <div class="match-card fade-in" ${isFinalizado ? `onclick="openMatchSummary('${p.id}')" style="cursor:pointer;"` : ''}>
+                    <div style="position: absolute; top: 15px; left: 20px; font-size: 0.85rem; color: var(--text-muted); font-weight: bold; background: rgba(0,0,0,0.2); padding: 2px 8px; border-radius: 10px;">
+                        #${index + 1}
+                    </div>
+                    <div class="match-team local">
+                        ${local.logo ? `<img src="${local.logo}" alt="L">` : `<i class="fa-solid fa-shield"></i>`}
+                        <span>${local.nombre || local.name}</span>
+                    </div>
+
+                    <div style="display:flex; flex-direction:column; align-items:center;">
+                        ${badgeHtml}
+                        ${centerVsHtml}
+                        ${dateTimeHtml}
+                        ${actionButtons}
+                    </div>
+
+                    <div class="match-team away">
+                        ${visitante.logo ? `<img src="${visitante.logo}" alt="V">` : `<i class="fa-solid fa-shield"></i>`}
+                        <span>${visitante.nombre || visitante.name}</span>
+                    </div>
                 </div>
-            </div>
             `;
+            html += matchCardHtml;
         });
         html += `</div>`;
 
@@ -1588,21 +2205,25 @@ document.addEventListener("DOMContentLoaded", async () => {
             });
         });
 
-        // Add event listeners for Live Tracker
-        sorteoResultadosContainer.querySelectorAll(".btn-manage-match").forEach(btn => {
-            btn.addEventListener("click", (e) => {
-                const matchId = e.target.closest("button").getAttribute("data-match-id");
-                openMatchDashboard(matchId);
-            });
-        });
-        
         // Add event listeners for Fast Result
         sorteoResultadosContainer.querySelectorAll(".btn-fast-result").forEach(btn => {
             btn.addEventListener("click", (e) => {
+                e.stopPropagation();
                 const matchId = e.target.closest("button").getAttribute("data-match-id");
                 openFastResultModal(matchId);
             });
         });
+
+        // Add event listeners for En vivo
+        sorteoResultadosContainer.querySelectorAll(".btn-manage-match").forEach(btn => {
+            btn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                const matchId = e.target.closest("button").getAttribute("data-match-id");
+                openMatchDashboard(matchId);
+            });
+        });
+
+
 
         const btnOpenOpciones = document.getElementById("btn-open-opciones-fecha");
         if (btnOpenOpciones) {
@@ -1613,12 +2234,308 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
+    window.openMatchSummary = function(matchId) {
+        const match = appData.partidos.find(p => p.id === matchId);
+        if (!match) return;
+
+        const local = appData.equipos.find(e => e.id === match.equipo1Id) || { nombre: 'Descansa', logo: '' };
+        const vis = appData.equipos.find(e => e.id === match.equipo2Id) || { nombre: 'Descansa', logo: '' };
+
+        document.getElementById('resumen-logo-local').src = local.logo || 'assets/default_shield.png';
+        document.getElementById('resumen-nombre-local').textContent = local.nombre || 'Equipo Local';
+        document.getElementById('resumen-goles-local').textContent = match.goles1 !== null ? match.goles1 : '-';
+
+        document.getElementById('resumen-logo-vis').src = vis.logo || 'assets/default_shield.png';
+        document.getElementById('resumen-nombre-vis').textContent = vis.nombre || 'Equipo Visitante';
+        document.getElementById('resumen-goles-vis').textContent = match.goles2 !== null ? match.goles2 : '-';
+
+        let faseText = match.fase === 'eliminatoria' || match.fase.startsWith('eliminatorias') ? 'Fase Eliminatoria' : `Jornada ${match.jornada}`;
+        if (match.grupo && match.grupo !== 'unico') faseText += ` - ${match.grupo}`;
+        document.getElementById('resumen-fase-info').textContent = faseText;
+
+        const eventsLocalContainer = document.getElementById('resumen-events-local');
+        const eventsVisContainer = document.getElementById('resumen-events-vis');
+        eventsLocalContainer.innerHTML = '';
+        eventsVisContainer.innerHTML = '';
+
+        if (match.detalles && match.detalles.eventos && match.detalles.eventos.length > 0) {
+            // Sort events by minute ascending
+            const sortedEvents = [...match.detalles.eventos].sort((a, b) => a.minuto - b.minuto);
+            
+            sortedEvents.forEach(ev => {
+                const getIcon = (tipo) => {
+                    if(tipo === 'gol') return '<i class="fa-solid fa-futbol" style="color:var(--text-primary);"></i>';
+                    if(tipo === 'amarilla') return '<div style="width:10px;height:14px;background:#facc15;display:inline-block;border-radius:2px;box-shadow: 1px 1px 2px rgba(0,0,0,0.2);"></div>';
+                    if(tipo === 'roja') return '<div style="width:10px;height:14px;background:#ef4444;display:inline-block;border-radius:2px;box-shadow: 1px 1px 2px rgba(0,0,0,0.2);"></div>';
+                    if(tipo === 'asistencia') return '<i class="fa-solid fa-handshake" style="color:var(--text-muted);"></i>';
+                    return '';
+                };
+
+                const evHtml = `
+                    <div style="display:flex; align-items:center; gap:8px; justify-content: ${ev.equipo === 'local' ? 'flex-end' : 'flex-start'};">
+                        ${ev.equipo === 'local' ? `<span>${ev.jugadorNombre} ${ev.minuto}'</span> ${getIcon(ev.tipo)}` : `${getIcon(ev.tipo)} <span>${ev.jugadorNombre} ${ev.minuto}'</span>`}
+                    </div>
+                `;
+                
+                if (ev.equipo === 'local') {
+                    eventsLocalContainer.innerHTML += evHtml;
+                } else {
+                    eventsVisContainer.innerHTML += evHtml;
+                }
+            });
+        } else {
+            // If it's a quick result, just say no detailed events
+            eventsLocalContainer.innerHTML = `<div style="text-align:center; color:var(--text-muted); font-style:italic;">Sin detalles</div>`;
+            eventsVisContainer.innerHTML = `<div style="text-align:center; color:var(--text-muted); font-style:italic;">Sin detalles</div>`;
+        }
+
+        const modal = document.getElementById('modal-resumen-partido');
+        if (modal) modal.classList.add('active');
+    } // End renderPartidosGenerados
+
+
+
+    window.openAddJornadaModal = function() {
+        alert("¡Próximamente! Función para agregar una fecha manual.");
+    };
+    
+    window.openAddMatchManualModal = function() {
+        alert("¡Próximamente! Función para agregar un partido manual.");
+    };
+    
+    window.openEditJornadaModal = function() {
+        alert("¡Próximamente! Función para editar la fecha y hora de la jornada.");
+    };
+    
+    window.openReorderJornadasModal = function() {
+        alert("¡Próximamente! Función para reordenar las rondas.");
+    };
+    
+    window.exportCalendarPDF = function() {
+        alert("¡Próximamente! Función para exportar calendario a PDF.");
+    };
+
+    function attachBracketEvents() {
+        sorteoResultadosContainer.querySelectorAll('.btn-fast-result').forEach(btn => {
+            btn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                const matchId = e.target.closest('button').getAttribute('data-match-id');
+                openFastResultModal(matchId);
+            });
+        });
+
+        sorteoResultadosContainer.querySelectorAll('.btn-manage-match').forEach(btn => {
+            btn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                const matchId = e.target.closest('button').getAttribute('data-match-id');
+                openMatchDashboard(matchId);
+            });
+        });
+    }
+    
+    window.renderPartidosGenerados = renderPartidosGenerados;
+
+    function renderBracketView() {
+        const eliminatorias = appData.partidos.filter(p => p.torneo === currentTorneo && p.calendario_nombre === window.currentCalendarioNombre && (p.fase === 'eliminatoria' || p.fase.startsWith('eliminatorias')));
+        
+        const llavesDict = {};
+        eliminatorias.forEach(p => {
+            if(!llavesDict[p.grupo]) llavesDict[p.grupo] = [];
+            llavesDict[p.grupo].push(p);
+        });
+        
+        const initialLlaves = Object.keys(llavesDict).filter(k => k.startsWith('Llave'));
+        const numLlaves = initialLlaves.length;
+        const llavesArr = initialLlaves.sort((a,b) => parseInt(a.match(/\d+/)[0]) - parseInt(b.match(/\d+/)[0])).map(k => llavesDict[k]);
+        
+        const renderMatchCard = (matches) => {
+            if (!matches) {
+                return `
+                    <div class="bracket-match empty-match">
+                        <div class="bracket-match-team">
+                            <i class="fa-solid fa-shield" style="color:#adb5bd; margin-right:8px;"></i>
+                            <span class="name" style="color:#adb5bd;">Por definir</span>
+                        </div>
+                        <div class="bracket-match-team">
+                            <i class="fa-solid fa-shield" style="color:#adb5bd; margin-right:8px;"></i>
+                            <span class="name" style="color:#adb5bd;">Por definir</span>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            const ida = matches.find(m => m.jornada === 1) || matches[0];
+            const vuelta = matches.find(m => m.jornada === 2);
+            
+            const local = ida.equipo1Id === 'vacante' ? { id: 'vacante', nombre: 'VACANTE', logo: '' } : appData.equipos.find(e => e.id === ida.equipo1Id) || { nombre: 'Desc.' };
+            const visitante = ida.equipo2Id === 'vacante' ? { id: 'vacante', nombre: 'VACANTE', logo: '' } : appData.equipos.find(e => e.id === ida.equipo2Id) || { nombre: 'Desc.' };
+            
+            const lLogo = local.logo ? `<img src="${local.logo}">` : `<i class="fa-solid fa-shield"></i>`;
+            const vLogo = visitante.logo ? `<img src="${visitante.logo}">` : `<i class="fa-solid fa-shield"></i>`;
+            
+            let scoreL = ida.goles1 !== null ? ida.goles1 : "-";
+            let scoreV = ida.goles2 !== null ? ida.goles2 : "-";
+            
+            if (vuelta && vuelta.goles1 !== null && vuelta.goles2 !== null && ida.goles1 !== null && ida.goles2 !== null) {
+                scoreL = ida.goles1 + vuelta.goles2;
+                scoreV = ida.goles2 + vuelta.goles1;
+            }
+            
+            return `
+                <div class="bracket-match fade-in">
+                    <div style="font-size:10px; color:#6c757d; text-align:center; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom:2px; margin-bottom:2px;">
+                        ${ida.grupo} ${vuelta ? '(Global)' : ''}
+                    </div>
+                    <div class="bracket-match-team">
+                        ${lLogo}
+                        <span class="name">${local.nombre || local.name}</span>
+                        <span class="score">${scoreL}</span>
+                    </div>
+                    <div class="bracket-match-team">
+                        ${vLogo}
+                        <span class="name">${visitante.nombre || visitante.name}</span>
+                        <span class="score">${scoreV}</span>
+                    </div>
+                    ${(local.id !== 'vacante' && visitante.id !== 'vacante') ? `
+                        <div style="display:flex; gap: 5px; justify-content: center; margin-top:5px;">
+                            <button class="edit-btn btn-fast-result" data-match-id="${ida.id}"><i class="fa-solid fa-pen"></i> Ida</button>
+                            ${vuelta ? `<button class="edit-btn btn-fast-result" data-match-id="${vuelta.id}" style="background:#10b981;" title="Vuelta"><i class="fa-solid fa-pen"></i> Vuelta</button>` : ''}
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        };
+
+        let html = `<div class="bracket-wrapper"><div class="bracket-container">`;
+
+        if (numLlaves === 4 || numLlaves === 8) { 
+            html += `<div class="bracket-half left-side">`;
+            html += `<div class="bracket-round"><div class="bracket-round-title">Cuartos</div>`;
+            html += `<div class="bracket-connector-wrapper">${renderMatchCard(llavesArr[0])}</div>`;
+            html += `<div class="bracket-connector-wrapper">${renderMatchCard(llavesArr[1])}</div>`;
+            html += `</div>`;
+            
+            html += `<div class="bracket-round"><div class="bracket-round-title">Semifinal</div>`;
+            html += `<div class="bracket-connector-wrapper">${renderMatchCard(llavesDict['Semifinal 1'] || null)}</div>`;
+            html += `</div>`;
+            html += `</div>`;
+
+            html += `<div class="bracket-round final-round">
+                        <div class="bracket-round-title" style="color: #f59e0b;">Final</div>
+                        <div class="bracket-connector-wrapper">${renderMatchCard(llavesDict['Final'] || null)}</div>
+                     </div>`;
+
+            html += `<div class="bracket-half right-side">`;
+            html += `<div class="bracket-round"><div class="bracket-round-title">Cuartos</div>`;
+            html += `<div class="bracket-connector-wrapper">${renderMatchCard(llavesArr[2])}</div>`;
+            html += `<div class="bracket-connector-wrapper">${renderMatchCard(llavesArr[3])}</div>`;
+            html += `</div>`;
+
+            html += `<div class="bracket-round"><div class="bracket-round-title">Semifinal</div>`;
+            html += `<div class="bracket-connector-wrapper">${renderMatchCard(llavesDict['Semifinal 2'] || null)}</div>`;
+            html += `</div>`;
+            html += `</div>`;
+        } 
+        else if (numLlaves === 2) {
+            html += `<div class="bracket-half left-side">`;
+            html += `<div class="bracket-round"><div class="bracket-round-title">Semifinal</div>`;
+            html += `<div class="bracket-connector-wrapper">${renderMatchCard(llavesArr[0])}</div>`;
+            html += `</div></div>`;
+
+            html += `<div class="bracket-round final-round">
+                        <div class="bracket-round-title" style="color: #f59e0b;">Final</div>
+                        <div class="bracket-connector-wrapper">${renderMatchCard(llavesDict['Final'] || null)}</div>
+                     </div>`;
+
+            html += `<div class="bracket-half right-side">`;
+            html += `<div class="bracket-round"><div class="bracket-round-title">Semifinal</div>`;
+            html += `<div class="bracket-connector-wrapper">${renderMatchCard(llavesArr[1])}</div>`;
+            html += `</div></div>`;
+        }
+        else if (numLlaves === 1) {
+            html += `<div class="bracket-round final-round" style="margin: 0 auto;">
+                        <div class="bracket-round-title" style="color: #f59e0b;">Gran Final</div>
+                        <div class="bracket-connector-wrapper">${renderMatchCard(llavesArr[0])}</div>
+                     </div>`;
+        }
+        else {
+            html += `<div class="bracket-round final-round" style="margin: 0 auto;">
+                        <div class="bracket-round-title">Eliminatorias</div>`;
+            llavesArr.forEach(llave => {
+                html += `<div class="bracket-connector-wrapper">${renderMatchCard(llave)}</div>`;
+            });
+            html += `</div>`;
+        }
+
+        html += `</div></div>`;
+        return html;
+    }
+
+    function getTablaDePosicionesArray() {
+        let todosLosPartidos = appData.partidos.filter(p => p.torneo === currentTorneo && p.calendario_nombre === window.currentCalendarioNombre && (p.fase === 'liga' || p.fase === 'grupos'));
+        
+        if (todosLosPartidos.length === 0) {
+            todosLosPartidos = appData.partidos.filter(p => p.torneo === currentTorneo && p.calendario_nombre === 'Torneo Principal' && (p.fase === 'liga' || p.fase === 'grupos'));
+            
+            if (todosLosPartidos.length === 0) {
+                let anyLeagueMatches = appData.partidos.filter(p => p.torneo === currentTorneo && (p.fase === 'liga' || p.fase === 'grupos'));
+                if (anyLeagueMatches.length > 0) {
+                    const firstFoundName = anyLeagueMatches[0].calendario_nombre;
+                    todosLosPartidos = anyLeagueMatches.filter(p => p.calendario_nombre === firstFoundName);
+                }
+            }
+        }
+
+        if (todosLosPartidos.length === 0) return [];
+        
+        const groupMapping = {};
+        todosLosPartidos.forEach(p => {
+            if (p.equipo1Id !== 'vacante') groupMapping[p.equipo1Id] = p.grupo;
+            if (p.equipo2Id !== 'vacante') groupMapping[p.equipo2Id] = p.grupo;
+        });
+
+        const partidosJugados = todosLosPartidos.filter(p => p.goles1 !== null && p.goles2 !== null && p.equipo1Id !== 'vacante' && p.equipo2Id !== 'vacante');
+
+        let stats = {};
+        appData.equipos.forEach(eq => {
+            if (groupMapping[eq.id]) {
+                stats[eq.id] = {
+                    id: eq.id,
+                    equipo: eq,
+                    grupo: groupMapping[eq.id],
+                    pj: 0, pg: 0, pe: 0, pp: 0, gf: 0, gc: 0, pts: 0, dif: 0
+                };
+            }
+        });
+
+        partidosJugados.forEach(p => {
+            const stat1 = stats[p.equipo1Id];
+            const stat2 = stats[p.equipo2Id];
+
+            if (stat1 && stat2) {
+                stat1.pj++; stat2.pj++;
+                stat1.gf += p.goles1; stat1.gc += p.goles2;
+                stat2.gf += p.goles2; stat2.gc += p.goles1;
+
+                if (p.goles1 > p.goles2) { stat1.pg++; stat1.pts += 3; stat2.pp++; } 
+                else if (p.goles1 < p.goles2) { stat2.pg++; stat2.pts += 3; stat1.pp++; } 
+                else { stat1.pe++; stat1.pts += 1; stat2.pe++; stat2.pts += 1; }
+            }
+        });
+
+        const arr = Object.values(stats);
+        arr.forEach(s => s.dif = s.gf - s.gc);
+        
+        // Sort by Points, Goal Difference, Goals For
+        arr.sort((a, b) => b.pts - a.pts || b.dif - a.dif || b.gf - a.gf);
+        return arr;
+    }
+
     function renderTablaPosiciones() {
         const container = document.getElementById("posiciones-container");
         if (!container) return;
 
-        // Obtener todos los partidos del torneo actual (liga o grupos)
-        const todosLosPartidos = appData.partidos.filter(p => p.torneo === currentTorneo && (p.fase === 'liga' || p.fase === 'grupos'));
+        const todosLosPartidos = appData.partidos.filter(p => p.torneo === currentTorneo && p.calendario_nombre === window.currentCalendarioNombre && (p.fase === 'liga' || p.fase === 'grupos'));
 
         if (todosLosPartidos.length === 0) {
             container.innerHTML = '<p style="text-align:center; color: var(--text-muted); font-size: 14px;">Genera los partidos para ver la tabla de posiciones.</p>';
@@ -1781,7 +2698,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
     // Handlers
-    function handleTransfer(playerId, newTeamId) {
+    async function handleTransfer(playerId, newTeamId) {
         const player = appData.jugadores.find(p => p.id == playerId);
         if (!player) return;
 
@@ -1806,7 +2723,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         player.equipoId = newTeamId;
         player.transferencias += 1;
-        saveData();
+        showLoader("Efectuando traspaso...");
+        await saveData();
+        hideLoader();
         updateSelects();
         alert("Traspaso completado.");
 
@@ -1814,7 +2733,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (document.getElementById("view-mercado").classList.contains("active")) renderMercado();
     }
 
-    function handleBaja(playerId) {
+    async function handleBaja(playerId) {
         const player = appData.jugadores.find(p => p.id == playerId);
         if (!player) return;
         if (confirm(`¿Seguro que deseas dar de baja a ${player.name}?`)) {
@@ -1826,7 +2745,9 @@ document.addEventListener("DOMContentLoaded", async () => {
                 tipo: 'baja',
                 equipoOrigenId: player.equipoId
             });
-            saveData();
+            showLoader("Dando de baja al jugador...");
+            await saveData();
+            hideLoader();
             updateSelects();
             alert("Jugador dado de baja.");
             if (currentTeamId) showTeamDetail(appData.equipos.find(t => t.id == currentTeamId));
@@ -1883,15 +2804,46 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     };
 
+    window.confirmDeleteTeam = async function() {
+        if (!currentTeamId) return;
+        const team = appData.equipos.find(t => t.id === currentTeamId);
+        if (!team) return;
+        if (!confirm(`¿Estás seguro de que deseas eliminar permanentemente el equipo "${team.nombre}"?\n\n¡ATENCIÓN! Esto también eliminará a todos sus jugadores y todos los partidos en los que esté programado. Esta acción no se puede deshacer.`)) return;
+
+        showLoader("Eliminando equipo...");
+        try {
+            await supabase.from('equipos').delete().eq('id', team.id);
+            await supabase.from('jugadores').delete().eq('equipo_id', team.id);
+            await supabase.from('partidos').delete().or(`equipo1_id.eq.${team.id},equipo2_id.eq.${team.id}`);
+        } catch(e) { console.error("Error eliminando en Supabase:", e); }
+
+        appData.jugadores = appData.jugadores.filter(p => p.equipoId !== team.id);
+        appData.partidos = appData.partidos.filter(p => p.equipo1Id !== team.id && p.equipo2Id !== team.id);
+        appData.equipos = appData.equipos.filter(t => t.id !== team.id);
+        
+        await saveData();
+        updateSelects();
+        renderTeams();
+        if(typeof renderPartidosGenerados === 'function') renderPartidosGenerados();
+        
+        viewEquipoDetalle.classList.remove("active");
+        viewEquipos.classList.add("active");
+        hideLoader();
+    };
+
     window.triggerBaja = function (id) {
         handleBaja(id);
     };
 
-    window.deleteMovimiento = function (id) {
+    window.deleteMovimiento = async function (id) {
         if (!confirm("¿Estás seguro de que deseas eliminar este movimiento y revertir la acción?")) return;
 
+        showLoader("Eliminando movimiento...");
         const movIndex = appData.movimientos.findIndex(m => m.id == id);
-        if (movIndex === -1) return;
+        if (movIndex === -1) {
+            hideLoader();
+            return;
+        }
         const mov = appData.movimientos[movIndex];
 
         const player = appData.jugadores.find(p => p.id === mov.jugadorId);
@@ -1905,22 +2857,34 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
         }
 
+        try {
+            await supabase.from('movimientos').delete().eq('id', mov.id);
+        } catch(e) {}
+
         appData.movimientos.splice(movIndex, 1);
-        saveData();
+        await saveData();
         updateSelects();
         renderMercado();
         if (currentTeamId) showTeamDetail(appData.equipos.find(t => t.id === currentTeamId));
+        hideLoader();
         alert("Acción eliminada correctamente.");
     };
 
-    window.deletePlayerComplete = function (id) {
+    window.deletePlayerComplete = async function (id) {
         const player = appData.jugadores.find(p => p.id === id);
         if (!player) return;
         if (confirm(`¿Estás completamente seguro de ELIMINAR a ${player.name} de la base de datos?\n\nEsta acción borrará todas sus estadísticas e historial. Úsalo solo si te equivocaste al crearlo.`)) {
+            showLoader("Eliminando jugador...");
+            try {
+                await supabase.from('jugadores').delete().eq('id', id);
+                await supabase.from('movimientos').delete().eq('jugador_id', id);
+            } catch(e) {}
+            
             appData.jugadores = appData.jugadores.filter(p => p.id !== id);
             appData.movimientos = appData.movimientos.filter(m => m.jugadorId !== id);
-            saveData();
+            await saveData();
             updateSelects();
+            hideLoader();
             alert("Jugador eliminado permanentemente de la base de datos.");
             if (currentTeamId) showTeamDetail(appData.equipos.find(t => t.id === currentTeamId));
             if (document.getElementById("view-mercado").classList.contains("active")) renderMercado();
@@ -2026,6 +2990,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (!isLocked) {
                 actionButtonsHTML = `
                     <div class="action-buttons">
+                        <button class="btn-action btn-edit" onclick="openStatsModal('${p.id}')" title="Editar Estadísticas Extra" style="background:var(--accent-primary); color:var(--bg-primary);"><i class="fa-solid fa-chart-simple"></i></button>
                         <button class="btn-action btn-edit" onclick="openInlineEdit('${p.id}')" title="Editar"><i class="fa-solid fa-pen"></i></button>
                         <button class="btn-action btn-transfer" onclick="openInlineTransfer('${p.id}')" title="Traspasar"><i class="fa-solid fa-right-left"></i></button>
                         <button class="btn-action btn-delete" onclick="triggerBaja('${p.id}')" title="Dar de Baja (Mercado)"><i class="fa-solid fa-user-minus"></i></button>
@@ -2114,6 +3079,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     function renderMercado() {
         altasBody.innerHTML = '';
         bajasBody.innerHTML = '';
+
+        const config = appData.config;
+        if (config.estadoClausura === 'finalizado') {
+            altasBody.innerHTML = '<div style="text-align:center; padding: 20px; color: var(--text-secondary);"><i class="fa-solid fa-broom" style="font-size:24px; margin-bottom:10px; opacity:0.5;"></i><br>El mercado ha sido limpiado para la próxima temporada.</div>';
+            bajasBody.innerHTML = '<div style="text-align:center; padding: 20px; color: var(--text-secondary);"><i class="fa-solid fa-broom" style="font-size:24px; margin-bottom:10px; opacity:0.5;"></i><br>El mercado ha sido limpiado para la próxima temporada.</div>';
+            return;
+        }
 
         const altas = appData.movimientos.filter(m => m.tipo === 'alta' || m.tipo === 'traspaso').sort((a, b) => b.id - a.id);
         const bajas = appData.movimientos.filter(m => m.tipo === 'baja').sort((a, b) => b.id - a.id);
@@ -2235,29 +3207,339 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
+    window.reincorporarJugador = function(playerId) {
+        const player = appData.jugadores.find(p => p.id == playerId);
+        if(!player) return;
+
+        let options = appData.equipos.map(eq => `<option value="${eq.id}">${eq.nombre}</option>`).join('');
+        
+        const overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.7); display:flex; align-items:center; justify-content:center; z-index:9999;';
+        
+        const modal = document.createElement('div');
+        modal.className = 'modal-content';
+        modal.style.maxWidth = '400px';
+        modal.innerHTML = `
+            <div class="modal-header">
+                <h2>Reincorporar Jugador</h2>
+                <button class="btn-close"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div style="margin-bottom:15px; text-align:left;">
+                <p style="margin-bottom:10px; color:var(--text-secondary);">Selecciona el equipo al que se unirá <strong>${player.name || player.nombre}</strong>:</p>
+                <select id="reincorporar-team-select" class="form-input">
+                    ${options}
+                </select>
+            </div>
+            <button id="btn-confirm-reincorporar" class="btn-primary w-full"><i class="fa-solid fa-check"></i> Confirmar</button>
+        `;
+
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+
+        const close = () => document.body.removeChild(overlay);
+        modal.querySelector('.btn-close').onclick = close;
+
+        modal.querySelector('#btn-confirm-reincorporar').onclick = () => {
+            const teamId = document.getElementById("reincorporar-team-select").value;
+            player.equipoId = teamId;
+            player.status = 'activo';
+            
+            appData.movimientos.push({
+                id: Date.now(),
+                fecha: new Date().toISOString(),
+                jugadorId: player.id,
+                tipo: 'traspaso',
+                equipoOrigenId: 'libre',
+                equipoDestinoId: teamId
+            });
+            saveData();
+            updateSelects();
+            renderInactivos();
+            close();
+            alert("Jugador reincorporado exitosamente.");
+        };
+    };
+
+    window.renderInactivos = function() {
+        const inactivosBody = document.getElementById("inactivos-table-body");
+        const emptyMsg = document.getElementById("inactivos-empty-msg");
+        const searchInput = (document.getElementById("search-inactivos").value || "").toLowerCase();
+
+        if (!inactivosBody) return;
+        inactivosBody.innerHTML = '';
+
+        const inactivos = appData.jugadores.filter(p => p.status !== 'activo');
+        const filtered = inactivos.filter(p => (p.name || p.nombre || '').toLowerCase().includes(searchInput));
+
+        if (filtered.length === 0) {
+            emptyMsg.style.display = 'block';
+            inactivosBody.parentElement.style.display = 'none';
+        } else {
+            emptyMsg.style.display = 'none';
+            inactivosBody.parentElement.style.display = 'table';
+            
+            filtered.forEach((p, index) => {
+                const tr = document.createElement("tr");
+                
+                const lastMove = appData.movimientos.slice().reverse().find(m => m.jugadorId == p.id && m.tipo === 'baja');
+                let lastTeam = 'Desconocido';
+                if (lastMove) {
+                    const t = appData.equipos.find(eq => eq.id == lastMove.equipoOrigenId);
+                    if (t) lastTeam = t.nombre;
+                } else {
+                    const t = appData.equipos.find(eq => eq.id == p.equipoId);
+                    if (t) lastTeam = t.nombre;
+                }
+
+                tr.innerHTML = `
+                    <td style="color:var(--text-secondary); font-weight:600;">${index + 1}.</td>
+                    <td>
+                        <div style="display:flex; align-items:center; gap:12px;">
+                            <div class="player-avatar" style="width:35px; height:35px; min-width:35px; background:var(--bg-secondary); border-radius:50%; display:flex; align-items:center; justify-content:center; overflow:hidden;">
+                                ${p.foto ? `<img src="${p.foto}" style="width:100%; height:100%; object-fit:cover;">` : `<i class="fa-solid fa-user" style="color:var(--text-secondary);"></i>`}
+                            </div>
+                            <span style="font-weight:600; color:var(--text-primary); font-size:15px;">${p.name || p.nombre}</span>
+                        </div>
+                    </td>
+                    <td style="color:var(--text-secondary); font-size:14px;"><i class="fa-solid fa-clock-rotate-left" style="opacity:0.6; margin-right:5px;"></i> ${lastTeam}</td>
+                    <td style="text-align:center;">
+                        <button onclick="reincorporarJugador('${p.id}')" class="btn-primary" style="padding: 6px 12px; font-size: 13px; background: rgba(16,185,129,0.1); color: var(--accent-primary); border: 1px solid var(--accent-primary);"><i class="fa-solid fa-rotate-left"></i> Reincorporar</button>
+                    </td>
+                `;
+                inactivosBody.appendChild(tr);
+            });
+        }
+    };
+    
+    document.getElementById("search-inactivos")?.addEventListener("input", renderInactivos);
+
     function renderStats(tab) {
         const config = tabTitles[tab];
         currentTabTitle.textContent = config.title;
-        statColumnHeader.textContent = config.statName;
-        tableBody.innerHTML = '';
+        
+        tableBody.innerHTML = "";
+        theadTr.innerHTML = "";
 
-        let activePlayers = appData.jugadores.filter(p => p.status === 'activo');
+        // Remover descripción previa si existe
+        const oldDesc = document.getElementById("stats-logic-desc");
+        if (oldDesc) oldDesc.remove();
 
-        if (tab === 'novatos') activePlayers = activePlayers.filter(p => p.isNovato);
+        if (tab === 'novatos') {
+            const descriptionHTML = `<div id="stats-logic-desc" style="display: flex; justify-content: space-between; align-items: center; background: rgba(16, 185, 129, 0.1); border-left: 4px solid var(--accent-primary); padding: 15px; margin-bottom: 20px; border-radius: 4px; font-size: 0.9rem; color: var(--text-secondary);">
+                <div>
+                    <strong style="color: var(--accent-primary);">¿Cómo se calcula el rendimiento del Novato?</strong><br>
+                    Se utiliza un <strong>Sistema de Puntos Directos</strong>: Cada gol suma 50 puntos, cada minuto jugado suma 0.5 puntos, cada tarjeta amarilla resta 15 puntos y cada roja resta 30 puntos. <br>
+                    <em>Nota: Los datos que agregues en el panel de edición se <strong>sumarán</strong> automáticamente a los datos históricos que ya tenía el jugador, así no tienes que recalcular todo desde la jornada 1.</em>
+                </div>
+                <button id="btn-download-social-novatos" style="background: #10b981; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; display: flex; align-items: center; gap: 8px; font-size: 1rem; transition: 0.2s;"><i class="fa-solid fa-camera"></i> Guardar Imagen</button>
+            </div>`;
+            tableContainer.insertAdjacentHTML('beforebegin', descriptionHTML);
+
+            const btnDownloadNovatos = document.getElementById('btn-download-social-novatos');
+            if(btnDownloadNovatos) {
+                btnDownloadNovatos.addEventListener('click', () => {
+                    if (window.downloadNovatosImage) window.downloadNovatosImage();
+                });
+            }
+
+            theadTr.innerHTML = `
+                <th>Pos</th>
+                <th>Jugador</th>
+                <th>Equipo</th>
+                <th>Goles</th>
+                <th>Minutos</th>
+                <th>Amarillas</th>
+                <th>Rendimiento</th>
+            `;
+
+            let realNovatos = appData.jugadores.filter(p => p.isNovato);
+            
+            let novatosData = realNovatos.map(realPlayer => {
+                const teamObj = appData.equipos.find(t => t.id === realPlayer.equipoId);
+                const stats = realPlayer.stats[currentTorneo] || {};
+                return {
+                    player: realPlayer.name,
+                    team: teamObj ? teamObj.nombre : 'Sin Equipo',
+                    goles: stats.goles || 0,
+                    minutos: stats.minutos || 0,
+                    amarillas: stats.amarillas || 0,
+                    rojas: stats.rojas || 0,
+                    isInactivo: realPlayer.status !== 'activo'
+                };
+            });
+
+            // Aplicar matemática a la lista final
+            novatosData = novatosData.map(d => {
+                let rendimientoNum = 0;
+                if (d.minutos > 0) {
+                    let puntos = (d.goles * 50) + (d.minutos * 0.5) - (d.amarillas * 15) - (d.rojas * 30);
+                    rendimientoNum = puntos > 0 ? puntos : 0;
+                }
+                return {
+                    ...d,
+                    rendimientoNum: rendimientoNum,
+                    rendimiento: rendimientoNum === 0 ? "0 pts" : rendimientoNum.toFixed(0) + " pts"
+                };
+            });
+
+            novatosData.sort((a, b) => {
+                if(b.rendimientoNum !== a.rendimientoNum) return b.rendimientoNum - a.rendimientoNum;
+                if((b.goles || 0) !== (a.goles || 0)) return (b.goles || 0) - (a.goles || 0);
+                return a.minutos - b.minutos;
+            });
+
+            novatosData.forEach((d, idx) => d.pos = idx + 1);
+
+            if (novatosData.length > 0) {
+                topPlayerName.textContent = novatosData[0].player;
+                topPlayerStat.textContent = `${novatosData[0].minutos} Minutos`;
+            }
+
+            novatosData.forEach((d) => {
+                const posClass = d.pos === 1 ? "pos-1" : d.pos === 2 ? "pos-2" : d.pos === 3 ? "pos-3" : "";
+                const tr = document.createElement("tr");
+                const colorRendimiento = d.rendimiento.includes("-") ? "#f87171" : d.rendimiento !== "0%" ? "#86efac" : "var(--text-muted)";
+                
+                let badgeInactivo = d.isInactivo ? `<span style="background: rgba(239, 68, 68, 0.2); color: #f87171; padding: 2px 6px; border-radius: 4px; font-size: 0.65rem; margin-left: 8px; border: 1px solid rgba(239, 68, 68, 0.5); font-weight: bold;">INACTIVO</span>` : "";
+
+                tr.innerHTML = `
+                    <td><span class="pos-badge ${posClass}">${d.pos}</span></td>
+                    <td>
+                        <div class="player-cell">
+                            <span class="player-name" style="font-size: 0.95rem; display: flex; align-items: center;">${d.player} ${badgeInactivo}</span>
+                        </div>
+                    </td>
+                    <td><span class="team-badge" style="background: rgba(255,255,255,0.05);">${d.team}</span></td>
+                    <td><span class="stat-highlight" style="color: var(--text-primary); font-size: 1rem;">${d.goles > 0 ? d.goles : '-'}</span></td>
+                    <td><span class="stat-highlight" style="color: var(--accent-primary); font-size: 1rem;">${d.minutos}</span></td>
+                    <td><span class="stat-highlight" style="color: #FCD34D; font-size: 1rem;">${d.amarillas > 0 ? d.amarillas : '-'}</span></td>
+                    <td><span class="stat-highlight" style="color: ${colorRendimiento}; font-size: 1rem;">${d.rendimiento}</span></td>
+                `;
+                tableBody.appendChild(tr);
+            });
+            return;
+        } else if (tab === 'porteros') {
+            const descriptionHTML = `<div id="stats-logic-desc" style="background: rgba(59, 130, 246, 0.1); border-left: 4px solid #3B82F6; padding: 15px; margin-bottom: 20px; border-radius: 4px; font-size: 0.9rem; color: var(--text-secondary); display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <strong style="color: #3B82F6;">¿Cómo se calcula el rendimiento del Portero?</strong><br>
+                    Se utiliza un <strong>Sistema de Puntos Directos</strong> que premia la constancia: Cada minuto jugado suma 1 punto, y cada gol recibido resta 10 puntos.<br>
+                    <em>Nota: Los datos que agregues en el panel de edición se <strong>sumarán</strong> automáticamente al registro histórico del jugador.</em>
+                </div>
+                <button id="btn-download-social" style="background: #10b981; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; display: flex; align-items: center; gap: 8px; font-size: 1rem; transition: 0.2s;"><i class="fa-solid fa-camera"></i> Guardar Imagen</button>
+            </div>`;
+            tableContainer.insertAdjacentHTML('beforebegin', descriptionHTML);
+
+            document.getElementById('btn-download-social').addEventListener('click', () => {
+                if (window.downloadPorterosImage) window.downloadPorterosImage();
+            });
+
+            theadTr.innerHTML = `
+                <th>Pos</th>
+                <th>Jugador</th>
+                <th>Equipo</th>
+                <th>Goles Rec.</th>
+                <th>Minutos</th>
+                <th>Puntos</th>
+            `;
+
+            let realPorteros = appData.jugadores.filter(p => p.isPortero);
+            
+            let porterosData = realPorteros.map(realPlayer => {
+                const teamObj = appData.equipos.find(t => t.id === realPlayer.equipoId);
+                const stats = realPlayer.stats[currentTorneo] || {};
+                return {
+                    player: realPlayer.name,
+                    team: teamObj ? teamObj.nombre : 'Sin Equipo',
+                    goles: stats.golesRecibidos || 0,
+                    minutos: stats.minutos || 0,
+                    isInactivo: realPlayer.status !== 'activo'
+                };
+            });
+
+            // Aplicar matemática a la lista final
+            porterosData = porterosData.map(d => {
+                let rendimientoNum = 0;
+                if (d.minutos > 0) {
+                    // Sistema de puntos directos: 1 por minuto, -10 por gol recibido
+                    let puntos = d.minutos - (d.goles * 10);
+                    rendimientoNum = puntos > 0 ? puntos : 0;
+                }
+                return {
+                    ...d,
+                    rendimientoNum: rendimientoNum,
+                    rendimiento: rendimientoNum === 0 ? "0 pts" : rendimientoNum.toFixed(0) + " pts"
+                };
+            });
+
+            porterosData.sort((a, b) => {
+                if(b.rendimientoNum !== a.rendimientoNum) return b.rendimientoNum - a.rendimientoNum;
+                if((a.goles || 0) !== (b.goles || 0)) return (a.goles || 0) - (b.goles || 0); // Menos goles es mejor en empate
+                return b.minutos - a.minutos; // Más minutos es mejor
+            });
+
+            porterosData.forEach((d, idx) => d.pos = idx + 1);
+
+            if (porterosData.length > 0) {
+                topPlayerName.textContent = porterosData[0].player;
+                topPlayerStat.textContent = `${porterosData[0].rendimientoNum} Puntos`;
+            }
+
+            porterosData.forEach((d) => {
+                const posClass = d.pos === 1 ? "pos-1" : d.pos === 2 ? "pos-2" : d.pos === 3 ? "pos-3" : "";
+                const tr = document.createElement("tr");
+                const colorRendimiento = d.rendimiento.includes("-") ? "#f87171" : d.rendimiento !== "0 pts" ? "#86efac" : "var(--text-muted)";
+                
+                let badgeInactivo = d.isInactivo ? `<span style="background: rgba(239, 68, 68, 0.2); color: #f87171; padding: 2px 6px; border-radius: 4px; font-size: 0.65rem; margin-left: 8px; border: 1px solid rgba(239, 68, 68, 0.5); font-weight: bold;">INACTIVO</span>` : "";
+
+                tr.innerHTML = `
+                    <td><span class="pos-badge ${posClass}">${d.pos}</span></td>
+                    <td>
+                        <div class="player-cell">
+                            <span class="player-name" style="font-size: 0.95rem; display: flex; align-items: center;">${d.player} ${badgeInactivo}</span>
+                        </div>
+                    </td>
+                    <td><span class="team-badge" style="background: rgba(255,255,255,0.05);">${d.team}</span></td>
+                    <td><span class="stat-highlight" style="color: #f87171; font-size: 1rem;">${d.goles > 0 ? d.goles : '-'}</span></td>
+                    <td><span class="stat-highlight" style="color: var(--accent-primary); font-size: 1rem;">${d.minutos}</span></td>
+                    <td><span class="stat-highlight" style="color: ${colorRendimiento}; font-size: 1rem; font-weight:bold;">${d.rendimiento}</span></td>
+                `;
+                tableBody.appendChild(tr);
+            });
+            return;
+        } else {
+            theadTr.innerHTML = `
+                <th>Pos</th>
+                <th>Jugador</th>
+                <th>Equipo</th>
+                <th id="stat-column-header">${config.statName}</th>
+            `;
+            // Removed assignment to constant variable
+        }
+
+        let activePlayers = appData.jugadores;
+
         if (tab === 'porteros') activePlayers = activePlayers.filter(p => p.isPortero);
 
         let statData = activePlayers.map(p => {
             const team = appData.equipos.find(t => t.id === p.equipoId);
             let val = 0;
-            // Get stats based on current tournament
-            const torneoStats = p.stats[currentTorneo];
+            const torneoStats = p.stats[currentTorneo] || {};
 
-            if (tab === 'goleadores' || tab === 'novatos') val = torneoStats.goles;
-            else if (tab === 'amarillas') val = torneoStats.amarillas;
-            else if (tab === 'rojas') val = torneoStats.rojas;
-            else if (tab === 'porteros') val = torneoStats.golesRecibidos;
+            if (tab === 'goleadores') val = torneoStats.goles || 0;
+            else if (tab === 'amarillas') val = torneoStats.amarillas || 0;
+            else if (tab === 'rojas') val = torneoStats.rojas || 0;
+            else if (tab === 'porteros') val = torneoStats.golesRecibidos || 0;
 
-            return { player: p, team: team ? team.nombre : 'Sin Equipo', stat: val };
+            let lastTeamName = team ? team.nombre : 'Sin Equipo';
+            if (p.status !== 'activo') {
+                const lastMove = appData.movimientos.slice().reverse().find(m => m.jugadorId == p.id && m.tipo === 'baja');
+                if (lastMove) {
+                    const t = appData.equipos.find(eq => eq.id == lastMove.equipoOrigenId);
+                    if (t) lastTeamName = t.nombre;
+                }
+            }
+
+            return { player: p, team: lastTeamName, stat: val, isInactivo: p.status !== 'activo' };
         });
 
         if (tab !== 'porteros') {
@@ -2277,6 +3559,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
                 let rowClass = "";
                 let alertBadge = "";
+                let badgeInactivo = d.isInactivo ? `<span style="background: rgba(239, 68, 68, 0.2); color: #f87171; padding: 2px 6px; border-radius: 4px; font-size: 0.65rem; margin-left: 8px; border: 1px solid rgba(239, 68, 68, 0.5); font-weight: bold;">INACTIVO</span>` : "";
 
                 if (tab === 'amarillas') {
                     const ciclo = d.stat % 5;
@@ -2297,18 +3580,51 @@ document.addEventListener("DOMContentLoaded", async () => {
                     <td>
                         <div class="player-cell">
                             <div class="player-avatar"><i class="fa-solid fa-user"></i></div>
-                            <span>${d.player.name} ${alertBadge}</span>
+                            <span>${d.player.name} ${alertBadge} ${badgeInactivo}</span>
                         </div>
                     </td>
                     <td><span class="team-badge">${d.team}</span></td>
-                    <td><span class="stat-highlight">${d.stat}</span></td>
+                    <td><span class="stat-highlight" style="${tab === 'amarillas' ? 'color:#fbbf24' : tab === 'rojas' ? 'color:#ef4444' : ''}">${d.stat}</span></td>
                 `;
+
+                // Edit on click
+                if (tab === 'amarillas' || tab === 'rojas') {
+                    tr.style.cursor = "pointer";
+                    tr.title = "Clic para ver historial y editar";
+                    tr.onclick = () => {
+                        openReporteModal(tab, d.player, d.stat, () => renderStats(tab));
+                    };
+                }
+
                 tableBody.appendChild(tr);
             });
+            
+            // Logica del boton Top 10 Imagen y Add Tarjeta
+            const btnExportTop10 = document.getElementById("btn-export-top10");
+            const btnAddTarjeta = document.getElementById("btn-add-tarjeta");
+            
+            if (btnExportTop10 && btnAddTarjeta) {
+                if (tab === 'amarillas' || tab === 'rojas') {
+                    btnExportTop10.style.display = "inline-block";
+                    btnExportTop10.onclick = () => exportTop10Image(tab, statData.slice(0, 10));
+                    
+                    btnAddTarjeta.style.display = "inline-block";
+                    btnAddTarjeta.onclick = () => openAddTarjetaModal(tab, () => renderStats(tab));
+                } else {
+                    btnExportTop10.style.display = "none";
+                    btnAddTarjeta.style.display = "none";
+                }
+            }
         } else {
             topPlayerName.textContent = "N/A";
             topPlayerStat.textContent = "0";
             tableBody.innerHTML = `<tr><td colspan="4" style="text-align:center;">No hay datos en el Torneo ${currentTorneo.toUpperCase()}.</td></tr>`;
+        }
+
+        // Re-aplicar el filtro de búsqueda si hay texto
+        const searchInput = document.getElementById('stats-search-input');
+        if (searchInput && searchInput.value) {
+            searchInput.dispatchEvent(new Event('input'));
         }
     }
 
@@ -2605,6 +3921,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         window.html2pdf().set(opt).from(wrapper).save();
     }
+    
+    } catch (initErr) {
+        console.error("Error en inicializacion UI:", initErr);
+        alert("Error al cargar la interfaz: " + initErr.message + "\nLinea: " + initErr.lineNumber);
+    }
 });
 
 /* =========================================================
@@ -2876,12 +4197,17 @@ function openPlayerSelectionForAction(actionType, isFastResult = false) {
         'amarilla': 'Tarjeta Amarilla',
         'roja': 'Tarjeta Roja',
         'cambio': 'Registrar Cambio',
-        'minutos': 'Registrar Minutos (Portero/Novato)'
+        'minutos': 'Ficha de Estadísticas (Portero/Novato)'
     };
     document.getElementById("select-player-title").innerText = titleMap[actionType];
     
-    document.getElementById("minutos-input-container").style.display = actionType === 'minutos' ? 'block' : 'none';
+    document.getElementById("minutos-input-container").style.display = 'none';
     document.getElementById("cambio-input-container").style.display = actionType === 'cambio' ? 'block' : 'none';
+    
+    const btnConfirm = document.getElementById("btn-confirm-action");
+    if (btnConfirm) {
+        btnConfirm.innerText = actionType === 'minutos' ? "Abrir Ficha de Estadísticas" : "Confirmar Acción";
+    }
     
     document.getElementById("modal-select-player").classList.add("active");
     
@@ -2913,7 +4239,12 @@ document.querySelectorAll(".team-sel-tab").forEach(tab => {
         const isLocal = e.target.id === "tab-sel-local";
         const teamId = isLocal ? currentActionMatch.equipo1Id : currentActionMatch.equipo2Id;
         
-        const teamPlayers = appData.jugadores.filter(j => j.equipoId === teamId);
+        let teamPlayers = appData.jugadores.filter(j => j.equipoId === teamId);
+        
+        if (currentActionType === 'minutos') {
+            teamPlayers = teamPlayers.filter(j => j.isNovato || j.isPortero);
+        }
+        
         const listContainer = document.getElementById("player-selection-list");
         
         if (teamPlayers.length === 0) {
@@ -2923,8 +4254,12 @@ document.querySelectorAll(".team-sel-tab").forEach(tab => {
         
         let html = "";
         teamPlayers.forEach(j => {
-            html += `<div class="player-sel-item" data-jug-id="${j.id}" data-team="${isLocal ? 'local' : 'visitante'}">
-                <i class="fa-solid fa-user"></i> ${j.nombre}
+            const badgePortero = j.isPortero ? `<span style="background: rgba(16, 185, 129, 0.2); color: #10b981; font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; margin-left: 5px;">Portero</span>` : "";
+            const badgeNovato = j.isNovato ? `<span style="background: rgba(59, 130, 246, 0.2); color: #3b82f6; font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; margin-left: 5px;">Novato</span>` : "";
+            
+            html += `<div class="player-sel-item" data-jug-id="${j.id}" data-team="${isLocal ? 'local' : 'visitante'}" style="display: flex; justify-content: space-between; align-items: center;">
+                <div><i class="fa-solid fa-user"></i> ${j.nombre}</div>
+                <div>${badgePortero}${badgeNovato}</div>
             </div>`;
         });
         listContainer.innerHTML = html;
@@ -2968,17 +4303,37 @@ document.getElementById("btn-confirm-action")?.addEventListener("click", () => {
         
         extraStr = "Gol anotado";
         
-        // Aquí podríamos sumar a stats_apertura_goles, pero es mejor que el usuario sincronice todo al final 
-        // o sumar directamente si lo requiere. Por ahora lo guardamos en el partido.
+        const player = appData.jugadores.find(j => j.id == jugId);
+        if (player && player.stats && player.stats[currentTorneo]) {
+            player.stats[currentTorneo].goles = (player.stats[currentTorneo].goles || 0) + 1;
+        }
     } 
+    else if (currentActionType === 'amarilla') {
+        extraStr = "Tarjeta Amarilla";
+        const player = appData.jugadores.find(j => j.id == jugId);
+        if (player && player.stats && player.stats[currentTorneo]) {
+            player.stats[currentTorneo].amarillas = (player.stats[currentTorneo].amarillas || 0) + 1;
+        }
+    }
+    else if (currentActionType === 'roja') {
+        extraStr = "Tarjeta Roja";
+        const player = appData.jugadores.find(j => j.id == jugId);
+        if (player && player.stats && player.stats[currentTorneo]) {
+            player.stats[currentTorneo].rojas = (player.stats[currentTorneo].rojas || 0) + 1;
+        }
+    }
+    else if (currentActionType === 'cambio') {
+        extraStr = "Cambio realizado";
+    }
     else if (currentActionType === 'minutos') {
-        const mins = document.getElementById("input-minutos-jugados").value;
-        if(!mins) { alert("Ingresa los minutos"); return; }
-        extraStr = `Jugó ${mins} minutos`;
+        document.getElementById("btn-close-select-player").click();
+        window.openStatsModal(jugId);
+        return;
     }
     
     addMatchEvent(currentActionMatch, currentActionType, teamSide, jugId, extraStr);
     
+    saveData(); // Save the new global stats to Supabase
     renderDashboardFeed(currentActionMatch);
     saveLiveMatchState(currentActionMatch);
     document.getElementById("btn-close-select-player").click();
@@ -3111,6 +4466,92 @@ openMatchDashboard = function(matchId) {
 // ==========================================
 let currentFastResultMatchId = null;
 
+    window.openAddMatchManualModal = function(isNewJornada = false) {
+        const modal = document.getElementById("modal-agregar-partido-manual");
+        if (!modal) return;
+        
+        const localSel = document.getElementById("partido-manual-local");
+        const visSel = document.getElementById("partido-manual-visitante");
+        
+        let eqOptions = appData.equipos.map(e => `<option value="${e.id}">${e.nombre}</option>`).join('');
+        eqOptions += `<option value="vacante">VACANTE (Descansa)</option>`;
+        
+        localSel.innerHTML = eqOptions;
+        visSel.innerHTML = eqOptions;
+        
+        // Auto-fill next jornada if requested
+        if (isNewJornada === true) {
+            const matchesInCurrent = appData.partidos.filter(p => p.torneo === currentTorneo && p.calendario_nombre === window.currentCalendarioNombre);
+            let maxJ = 0;
+            matchesInCurrent.forEach(p => {
+                if (p.jornada && !isNaN(p.jornada) && p.jornada > maxJ) maxJ = p.jornada;
+            });
+            document.getElementById("partido-manual-jornada").value = maxJ + 1;
+        }
+
+        document.getElementById("modal-opciones-fecha").classList.remove('active');
+        modal.classList.add('active');
+    };
+
+    window.openAddJornadaModal = function() {
+        window.openAddMatchManualModal(true);
+    };
+
+    const formAddMatchManual = document.getElementById("form-agregar-partido-manual");
+    if (formAddMatchManual) {
+        formAddMatchManual.addEventListener("submit", (e) => {
+            e.preventDefault();
+            const id1 = document.getElementById("partido-manual-local").value;
+            const id2 = document.getElementById("partido-manual-visitante").value;
+            const jornada = document.getElementById("partido-manual-jornada").value;
+            const fase = document.getElementById("partido-manual-fase").value;
+            const fechaStr = document.getElementById("partido-manual-fecha").value;
+            const horaStr = document.getElementById("partido-manual-hora").value;
+
+            if (id1 === id2 && id1 !== 'vacante') {
+                return alert("No puedes seleccionar el mismo equipo como local y visitante.");
+            }
+
+            const newId = Date.now().toString() + Math.floor(Math.random()*1000);
+            const p = {
+                id: newId,
+                torneo: currentTorneo,
+                fase: fase,
+                jornada: parseInt(jornada),
+                grupo: null,
+                equipo1Id: id1,
+                equipo2Id: id2,
+                goles1: null,
+                goles2: null,
+                calendario_nombre: window.currentCalendarioNombre,
+                detalles: {
+                    estado: 'pendiente'
+                }
+            };
+            
+            if (fechaStr) {
+                p.detalles.fechaText = fechaStr;
+            }
+            if (horaStr) {
+                p.detalles.horaText = horaStr;
+            }
+
+            appData.partidos.push(p);
+            savePartidosToSupabase();
+            document.getElementById("modal-agregar-partido-manual").classList.remove('active');
+            
+            window.currentJornadaTab = `Jornada ${jornada}`;
+            updateCalendarioUI();
+        });
+    }
+
+    const btnClosePartidoManual = document.getElementById("btn-close-partido-manual");
+    if (btnClosePartidoManual) {
+        btnClosePartidoManual.addEventListener("click", () => {
+            document.getElementById("modal-agregar-partido-manual").classList.remove('active');
+        });
+    }
+
 function openFastResultModal(matchId) {
     currentFastResultMatchId = matchId;
     const match = appData.partidos.find(p => p.id === matchId);
@@ -3126,6 +4567,10 @@ function openFastResultModal(matchId) {
 
     document.getElementById("res-rapido-goles-local").value = match.goles1 !== null ? match.goles1 : 0;
     document.getElementById("res-rapido-goles-vis").value = match.goles2 !== null ? match.goles2 : 0;
+
+    // Poblar fecha y hora si existen
+    document.getElementById("res-rapido-fecha").value = (match.detalles && match.detalles.fecha) ? match.detalles.fecha : '';
+    document.getElementById("res-rapido-hora").value = (match.detalles && match.detalles.hora) ? match.detalles.hora : '';
 
     document.getElementById("modal-resultado-rapido").classList.add("active");
 }
@@ -3156,6 +4601,10 @@ if (btnCopiar) {
         e.preventDefault();
         let url = window.location.href;
         url = url.substring(0, url.lastIndexOf('/')) + '/inscripcion.html';
+        const currentActiveId = localStorage.getItem('femfutpal_active_id');
+        if (currentActiveId) {
+            url += '?torneo=' + currentActiveId;
+        }
         navigator.clipboard.writeText(url).then(() => {
             alert("¡Enlace copiado! Ya puedes pegarlo en WhatsApp.");
         }).catch(() => {
@@ -3163,20 +4612,2155 @@ if (btnCopiar) {
         });
     });
 }
-document.getElementById("btn-save-resultado-rapido")?.addEventListener("click", () => {
+function checkBracketAdvancement(match) {
+    if (!match.fase || !match.fase.startsWith('eliminatoria')) return;
+    if (!match.grupo) return;
+    
+    const bracketMatches = appData.partidos.filter(p => p.torneo === match.torneo && p.calendario_nombre === match.calendario_nombre && p.fase === match.fase && p.grupo === match.grupo);
+    const allFinished = bracketMatches.every(m => m.detalles && m.detalles.estado === 'finalizado');
+    if (!allFinished) return;
+    
+    let globalEq1 = 0;
+    let globalEq2 = 0;
+    let eq1Id = bracketMatches[0].equipo1Id;
+    let eq2Id = bracketMatches[0].equipo2Id;
+
+    bracketMatches.forEach(m => {
+        if (m.equipo1Id === eq1Id) {
+            globalEq1 += (m.goles1 || 0);
+            globalEq2 += (m.goles2 || 0);
+        } else {
+            globalEq1 += (m.goles2 || 0);
+            globalEq2 += (m.goles1 || 0);
+        }
+    });
+
+    let winnerId = null;
+    if (globalEq1 > globalEq2) winnerId = eq1Id;
+    else if (globalEq2 > globalEq1) winnerId = eq2Id;
+    else winnerId = eq1Id; // Default to eq1 if tie for now
+
+    let nextGrupo = null;
+    let isEquipo1InNext = true;
+
+    const grupoMatch = match.grupo.match(/(Llave|Semifinal)\s(\d+)/);
+    if (!grupoMatch) return;
+
+    const type = grupoMatch[1];
+    const num = parseInt(grupoMatch[2]);
+
+    if (type === 'Llave') {
+        const semiNum = Math.ceil(num / 2);
+        nextGrupo = `Semifinal ${semiNum}`;
+        isEquipo1InNext = (num % 2 !== 0);
+    } else if (type === 'Semifinal') {
+        nextGrupo = `Final`;
+        isEquipo1InNext = (num === 1);
+    } else {
+        return;
+    }
+
+    const isIdaYVuelta = bracketMatches.some(m => m.jornada === 2);
+    let nextMatches = appData.partidos.filter(p => p.torneo === match.torneo && p.calendario_nombre === match.calendario_nombre && p.fase === match.fase && p.grupo === nextGrupo);
+    
+    if (nextMatches.length === 0) {
+        let newIda = {
+            id: Date.now().toString() + Math.floor(Math.random()*1000),
+            torneo: match.torneo,
+            calendario_nombre: match.calendario_nombre,
+            fase: match.fase,
+            jornada: 1,
+            equipo1Id: isEquipo1InNext ? winnerId : 'vacante',
+            equipo2Id: !isEquipo1InNext ? winnerId : 'vacante',
+            goles1: null,
+            goles2: null,
+            grupo: nextGrupo
+        };
+        appData.partidos.push(newIda);
+
+        if (isIdaYVuelta) {
+            let newVuelta = {
+                id: (Date.now() + 1).toString() + Math.floor(Math.random()*1000),
+                torneo: match.torneo,
+                calendario_nombre: match.calendario_nombre,
+                fase: match.fase,
+                jornada: 2,
+                equipo1Id: !isEquipo1InNext ? winnerId : 'vacante',
+                equipo2Id: isEquipo1InNext ? winnerId : 'vacante',
+                goles1: null,
+                goles2: null,
+                grupo: nextGrupo
+            };
+            appData.partidos.push(newVuelta);
+        }
+    } else {
+        nextMatches.forEach(nm => {
+            const isThisIda = nm.jornada === 1;
+            const shouldBeLocal = isThisIda ? isEquipo1InNext : !isEquipo1InNext;
+            if (shouldBeLocal) {
+                nm.equipo1Id = winnerId;
+            } else {
+                nm.equipo2Id = winnerId;
+            }
+        });
+    }
+}
+
+// ============================================
+// LOGICA DE EXPORTACION TOP 10 CREATIVA
+// ============================================
+async function exportTop10Image(tab, players) {
+    if (players.length === 0) {
+        alert("No hay jugadores suficientes para exportar.");
+        return;
+    }
+
+    const isAmarilla = tab === 'amarillas';
+    const bgColor = isAmarilla ? 'linear-gradient(135deg, #1e293b, #0f172a)' : 'linear-gradient(135deg, #2c1010, #0f172a)';
+    const accentColor = isAmarilla ? '#fbbf24' : '#ef4444';
+    const titleText = isAmarilla ? 'TOP 10 TARJETAS AMARILLAS' : 'TOP 10 TARJETAS ROJAS';
+    
+    // Create the container
+    const container = document.createElement("div");
+    container.style.position = "absolute";
+    container.style.left = "-9999px";
+    container.style.top = "-9999px";
+    container.style.width = "800px";
+    container.style.background = bgColor;
+    container.style.color = "#ffffff";
+    container.style.fontFamily = "'Inter', sans-serif";
+    container.style.padding = "40px";
+    container.style.borderRadius = "20px";
+    container.style.boxSizing = "border-box";
+    
+    // Header
+    let html = `
+        <div style="text-align: center; margin-bottom: 30px; border-bottom: 2px solid ${accentColor}; padding-bottom: 20px;">
+            <h1 style="margin: 0; font-size: 36px; text-transform: uppercase; font-weight: 900; letter-spacing: 2px; text-shadow: 0 0 10px ${accentColor};">${titleText}</h1>
+            <h3 style="margin: 5px 0 0 0; font-size: 18px; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px;">Torneo ${currentTorneo}</h3>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+    `;
+
+    // Rows
+    players.forEach((pData, index) => {
+        const pos = index + 1;
+        const alertBadge = isAmarilla && pData.stat >= 4 
+            ? `<span style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid #fbbf24; font-size: 11px; padding: 2px 6px; border-radius: 4px; margin-left: 10px; font-weight: bold;">RIESGO (${pData.stat})</span>` 
+            : "";
+            
+        html += `
+            <div style="display: flex; align-items: center; background: rgba(255, 255, 255, 0.05); border-left: 4px solid ${accentColor}; border-radius: 8px; padding: 12px 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+                <div style="width: 40px; font-size: 24px; font-weight: 900; color: ${accentColor}; opacity: 0.8;">#${pos}</div>
+                <div style="flex: 1; margin-left: 15px;">
+                    <div style="font-size: 20px; font-weight: 700; letter-spacing: 0.5px;">${pData.player.name} ${alertBadge}</div>
+                    <div style="font-size: 14px; color: #cbd5e1; margin-top: 4px; text-transform: uppercase; letter-spacing: 1px;"><i class="fa-solid fa-shield-halved" style="margin-right: 5px;"></i>${pData.team}</div>
+                </div>
+                <div style="width: 60px; height: 60px; background: rgba(0,0,0,0.5); border-radius: 12px; display: flex; justify-content: center; align-items: center; border: 2px solid ${accentColor};">
+                    <span style="font-size: 32px; font-weight: 900; color: ${accentColor}; line-height: 1; margin-top: 2px;">${pData.stat}</span>
+                </div>
+            </div>
+        `;
+    });
+
+    html += `
+        </div>
+        <div style="margin-top: 30px; text-align: center; font-size: 12px; color: #64748b; font-weight: 600; letter-spacing: 1px; border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 20px;">
+            SISTEMA DE ESTADÍSTICAS &bull; CREADO AUTOMÁTICAMENTE
+        </div>
+    `;
+
+    container.innerHTML = html;
+    document.body.appendChild(container);
+
+    showLoader("Generando imagen Top 10...");
+
+    try {
+        const canvas = await html2canvas(container, {
+            scale: 2, // High resolution
+            backgroundColor: null,
+            logging: false
+        });
+        
+        const link = document.createElement("a");
+        link.download = `Top10_${tab}_${currentTorneo}.png`;
+        link.href = canvas.toDataURL("image/png");
+        link.click();
+    } catch (e) {
+        console.error("Error generating image:", e);
+        alert("Ocurrió un error al generar la imagen. Asegúrate de tener conexión a internet para descargar las fuentes e iconos.");
+    } finally {
+        hideLoader();
+        document.body.removeChild(container);
+    }
+}
+
+// ============================================
+// MODAL DE REPORTE DE TARJETAS
+// ============================================
+function openReporteModal(tab, playerObj, currentTotal, onSaveCallback) {
+    const isAmarilla = tab === 'amarillas';
+    const playerEvents = [];
+    
+    // Buscar en los partidos del torneo actual
+    appData.partidos.forEach(p => {
+        if (p.detalles && p.detalles.eventos) {
+            p.detalles.eventos.forEach(ev => {
+                const tipoTarget = isAmarilla ? 'amarilla' : 'roja';
+                if (ev.jugadorId === playerObj.id && ev.tipo === tipoTarget) {
+                    const team1 = appData.equipos.find(e => e.id === p.equipo1Id);
+                    const team2 = appData.equipos.find(e => e.id === p.equipo2Id);
+                    
+                    let fechaStr = "N/A";
+                    if (p.detalles.fechaProgramada) {
+                        fechaStr = p.detalles.fechaProgramada;
+                    } else if (p.detalles.tiempoInicio) {
+                        const d = new Date(p.detalles.tiempoInicio);
+                        const meses = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+                        fechaStr = `${d.getDate()} de ${meses[d.getMonth()]} ${d.getFullYear()}`;
+                    }
+                    
+                    playerEvents.push({
+                        fecha: fechaStr,
+                        jornada: p.jornada || "N/A",
+                        partido: `${team1 ? team1.nombre : 'Local'} vs ${team2 ? team2.nombre : 'Visitante'}`,
+                        minuto: ev.minuto
+                    });
+                }
+            });
+        }
+    });
+
+    // Ya no usamos manualEvents porque ahora se guardan en appData.partidos con fase 'manual'
+    // Ordenar por fecha si es posible
+    playerEvents.sort((a, b) => {
+        const da = new Date(a.fecha);
+        const db = new Date(b.fecha);
+        if (!isNaN(da) && !isNaN(db)) return db - da; // Descendente
+        return 0;
+    });
+
+    const modalOverlay = document.createElement('div');
+    modalOverlay.style.position = 'fixed';
+    modalOverlay.style.top = '0';
+    modalOverlay.style.left = '0';
+    modalOverlay.style.width = '100vw';
+    modalOverlay.style.height = '100vh';
+    modalOverlay.style.backgroundColor = 'rgba(0,0,0,0.6)';
+    modalOverlay.style.display = 'flex';
+    modalOverlay.style.justifyContent = 'center';
+    modalOverlay.style.alignItems = 'center';
+    modalOverlay.style.zIndex = '10000';
+    modalOverlay.style.backdropFilter = 'blur(4px)';
+
+    let eventsHtml = '';
+    if (playerEvents.length === 0) {
+        eventsHtml = `<div style="text-align:center; color:#94a3b8; padding: 30px 20px; font-style:italic;">No hay registros de partidos en este torneo.<br><br><span style="font-size:12px;">(Las tarjetas actuales provienen del torneo anterior o de edición manual).</span></div>`;
+    } else {
+        playerEvents.forEach(ev => {
+            eventsHtml += `
+                <div style="border-bottom: 1px solid #e2e8f0; padding: 12px 0; font-size: 15px; color: #334155; font-family: 'Inter', sans-serif;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom: 8px;">
+                        <strong style="color:#1e293b;">Fecha:</strong> <span>${ev.fecha}</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; margin-bottom: 8px;">
+                        <strong style="color:#1e293b;">Jornada:</strong> <span>${ev.jornada}</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between;">
+                        <strong style="color:#1e293b;">Partido:</strong> <span style="text-align:right;">${ev.partido} ${ev.minuto ? `<br><small style="color:#64748b;">(Min ${ev.minuto})</small>` : ''}</span>
+                    </div>
+                </div>
+            `;
+        });
+    }
+
+    const titleColor = isAmarilla ? '#10b981' : '#ef4444'; 
+
+    modalOverlay.innerHTML = `
+        <div style="background: white; width: 90%; max-width: 500px; border-radius: 8px; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); display: flex; flex-direction: column; max-height: 85vh; font-family: 'Inter', sans-serif;">
+            <div style="padding: 20px; text-align: center; border-bottom: 1px solid #f1f5f9;">
+                <h2 style="margin:0; color: ${titleColor}; font-size: 22px; font-weight: 600;">Reporte ${tab.charAt(0).toUpperCase() + tab.slice(1)}</h2>
+                <h3 style="margin:8px 0 0 0; color: #3b82f6; font-size: 16px; font-weight: normal;">${playerObj.name}</h3>
+            </div>
+            
+            <div style="padding: 10px 20px; overflow-y: auto; flex: 1; background: #f8fafc;">
+                ${eventsHtml}
+            </div>
+            
+            <div style="padding: 15px 20px; background: white; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <label style="font-size: 14px; font-weight: 600; color: #475569;">Total Manual:</label>
+                    <input type="number" id="manual-cards-input" value="${currentTotal}" min="0" style="width: 70px; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; text-align: center; font-size: 16px; font-weight: bold;" />
+                </div>
+                <div>
+                    <button id="btn-close-report" style="padding: 10px 16px; background: #e2e8f0; color: #475569; border: none; border-radius: 6px; cursor: pointer; margin-right: 8px; font-weight: 600;">Cerrar</button>
+                    <button id="btn-save-report" style="padding: 10px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">Guardar</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modalOverlay);
+
+    document.getElementById("btn-close-report").onclick = () => {
+        document.body.removeChild(modalOverlay);
+    };
+
+    document.getElementById("btn-save-report").onclick = () => {
+        const newVal = parseInt(document.getElementById("manual-cards-input").value);
+        if (!isNaN(newVal)) {
+            const addedCards = newVal - currentTotal;
+            if (addedCards > 0) {
+                for (let i = 0; i < addedCards; i++) {
+                    appData.partidos.push({
+                        id: Date.now() + "_" + Math.floor(Math.random()*10000) + "_" + i,
+                        torneo_id: activeId,
+                        torneo: currentTorneo,
+                        fase: 'manual',
+                        jornada: 'Añadida en Reporte',
+                        equipo1Id: playerObj.equipoId,
+                        equipo2Id: 'vacante',
+                        goles1: null,
+                        goles2: null,
+                        detalles: {
+                            estado: 'manual',
+                            fechaProgramada: new Date().toISOString().split('T')[0],
+                            eventos: [
+                                {
+                                    tipo: isAmarilla ? 'amarilla' : 'roja',
+                                    jugadorId: playerObj.id,
+                                    minuto: null
+                                }
+                            ]
+                        }
+                    });
+                }
+            }
+            
+            playerObj.stats[currentTorneo][tab] = newVal;
+            saveData();
+            if (onSaveCallback) onSaveCallback();
+        }
+        document.body.removeChild(modalOverlay);
+    };
+}
+
+// ============================================
+// MODAL PARA AÑADIR TARJETA DIRECTA / CREAR JUGADOR
+// ============================================
+function openAddTarjetaModal(tab, onSaveCallback) {
+    const isAmarilla = tab === 'amarillas';
+    const titleColor = isAmarilla ? '#f59e0b' : '#ef4444';
+    
+    const modalOverlay = document.createElement('div');
+    modalOverlay.style.position = 'fixed';
+    modalOverlay.style.top = '0';
+    modalOverlay.style.left = '0';
+    modalOverlay.style.width = '100vw';
+    modalOverlay.style.height = '100vh';
+    modalOverlay.style.backgroundColor = 'rgba(0,0,0,0.6)';
+    modalOverlay.style.display = 'flex';
+    modalOverlay.style.justifyContent = 'center';
+    modalOverlay.style.alignItems = 'center';
+    modalOverlay.style.zIndex = '10000';
+    modalOverlay.style.backdropFilter = 'blur(4px)';
+
+    let equipoOptions = '<option value="">-- Selecciona un Equipo --</option>';
+    appData.equipos.forEach(eq => {
+        equipoOptions += `<option value="${eq.id}">${eq.nombre}</option>`;
+    });
+
+    modalOverlay.innerHTML = `
+        <div style="background: white; width: 90%; max-width: 450px; border-radius: 8px; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); font-family: 'Inter', sans-serif;">
+            <div style="padding: 20px; text-align: center; border-bottom: 1px solid #f1f5f9; background: #f8fafc;">
+                <h2 style="margin:0; color: ${titleColor}; font-size: 20px; font-weight: 600;">Añadir Tarjeta ${isAmarilla ? 'Amarilla' : 'Roja'}</h2>
+                <p style="margin: 5px 0 0 0; font-size: 13px; color: #64748b;">Selecciona un jugador e ingresa los detalles del evento.</p>
+            </div>
+            
+            <div style="padding: 20px; max-height: 50vh; overflow-y: auto;">
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 5px; font-size: 14px; font-weight: 600; color: #334155;">1. Equipo</label>
+                    <select id="add-card-equipo" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 15px;">
+                        ${equipoOptions}
+                    </select>
+                </div>
+                
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 5px; font-size: 14px; font-weight: 600; color: #334155;">2. Nombre del Jugador</label>
+                    <input type="text" id="add-card-jugador-name" list="add-card-datalist" placeholder="Escribe o selecciona un nombre..." style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 15px; box-sizing: border-box;" disabled />
+                    <datalist id="add-card-datalist"></datalist>
+                </div>
+
+                <div style="margin-bottom: 15px; display: flex; gap: 10px;">
+                    <div style="flex: 1;">
+                        <label style="display: block; margin-bottom: 5px; font-size: 14px; font-weight: 600; color: #334155;">Fecha</label>
+                        <input type="date" id="add-card-fecha" value="${new Date().toISOString().split('T')[0]}" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 15px; box-sizing: border-box;" />
+                    </div>
+                    <div style="flex: 1;">
+                        <label style="display: block; margin-bottom: 5px; font-size: 14px; font-weight: 600; color: #334155;">Jornada <span style="font-weight:normal; color:#94a3b8;">(Opcional)</span></label>
+                        <input type="text" id="add-card-jornada" placeholder="Ej. Jornada 5" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 15px; box-sizing: border-box;" />
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 5px; font-size: 14px; font-weight: 600; color: #334155;">Contra qué equipo <span style="font-weight:normal; color:#94a3b8;">(Opcional)</span></label>
+                    <select id="add-card-rival" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 15px;">
+                        <option value="">-- Selecciona el Rival --</option>
+                        ${equipoOptions.replace('<option value="">-- Selecciona un Equipo --</option>', '')}
+                    </select>
+                </div>
+
+                <div style="margin-bottom: 5px;">
+                    <label style="display: block; margin-bottom: 5px; font-size: 14px; font-weight: 600; color: #334155;">Cantidad de Tarjetas a sumar</label>
+                    <input type="number" id="add-card-cantidad" value="1" min="1" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 15px; box-sizing: border-box;" />
+                </div>
+            </div>
+            
+            <div style="padding: 15px 20px; background: #f1f5f9; border-top: 1px solid #e2e8f0; display: flex; justify-content: flex-end; gap: 10px;">
+                <button id="btn-cancel-add-card" style="padding: 10px 16px; background: white; color: #475569; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; font-weight: 600;">Cancelar</button>
+                <button id="btn-save-add-card" style="padding: 10px 16px; background: ${titleColor}; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">Guardar Tarjeta</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modalOverlay);
+
+    const selectEquipo = document.getElementById("add-card-equipo");
+    const inputName = document.getElementById("add-card-jugador-name");
+    const dataList = document.getElementById("add-card-datalist");
+    const btnCancel = document.getElementById("btn-cancel-add-card");
+    const btnSave = document.getElementById("btn-save-add-card");
+    const inputCantidad = document.getElementById("add-card-cantidad");
+    const inputFecha = document.getElementById("add-card-fecha");
+    const inputJornada = document.getElementById("add-card-jornada");
+    const selectRival = document.getElementById("add-card-rival");
+
+    selectEquipo.addEventListener("change", () => {
+        const eqId = selectEquipo.value;
+        if (!eqId) {
+            inputName.disabled = true;
+            inputName.value = "";
+            dataList.innerHTML = "";
+            return;
+        }
+        
+        inputName.disabled = false;
+        const jugadoresEquipo = appData.jugadores.filter(j => j.equipoId === eqId && j.status === 'activo');
+        dataList.innerHTML = "";
+        jugadoresEquipo.forEach(j => {
+            const option = document.createElement("option");
+            option.value = j.name || j.nombre;
+            dataList.appendChild(option);
+        });
+    });
+
+    btnCancel.onclick = () => document.body.removeChild(modalOverlay);
+
+    btnSave.onclick = () => {
+        const eqId = selectEquipo.value;
+        const jName = inputName.value.trim();
+        const cant = parseInt(inputCantidad.value);
+
+        if (!eqId || !jName || isNaN(cant) || cant <= 0) {
+            alert("Por favor completa todos los campos correctamente.");
+            return;
+        }
+
+        // Buscar si existe (case insensitive)
+        let playerObj = appData.jugadores.find(j => j.equipoId === eqId && (j.name || j.nombre).toLowerCase() === jName.toLowerCase());
+
+        if (!playerObj) {
+            // Crear nuevo
+            playerObj = {
+                id: Date.now() + "" + Math.floor(Math.random()*1000),
+                equipoId: eqId,
+                nombre: jName,
+                name: jName,
+                isNovato: false,
+                isPortero: false,
+                status: 'activo',
+                transferencias: 0,
+                stats: {
+                    apertura: { goles: 0, amarillas: 0, rojas: 0, golesRecibidos: 0, minutos: 0 },
+                    clausura: { goles: 0, amarillas: 0, rojas: 0, golesRecibidos: 0, minutos: 0 }
+                }
+            };
+            appData.jugadores.push(playerObj);
+        }
+
+        const rivalId = selectRival.value;
+        const rivalObj = rivalId ? appData.equipos.find(e => e.id === rivalId) : null;
+        
+        for (let i = 0; i < cant; i++) {
+            appData.partidos.push({
+                id: Date.now() + "_" + Math.floor(Math.random()*10000) + "_" + i,
+                torneo_id: activeId,
+                torneo: currentTorneo,
+                fase: 'manual', // esto evita que se muestre en el UI de jornadas
+                jornada: inputJornada.value.trim() || 'Manual',
+                equipo1Id: playerObj.equipoId,
+                equipo2Id: rivalObj ? rivalObj.id : 'vacante',
+                goles1: null,
+                goles2: null,
+                detalles: {
+                    estado: 'manual', // evita que afecte tabla de posiciones
+                    fechaProgramada: inputFecha.value || new Date().toISOString().split('T')[0],
+                    eventos: [
+                        {
+                            tipo: isAmarilla ? 'amarilla' : 'roja',
+                            jugadorId: playerObj.id,
+                            minuto: null
+                        }
+                    ]
+                }
+            });
+        }
+
+        playerObj.stats[currentTorneo][tab] = (playerObj.stats[currentTorneo][tab] || 0) + cant;
+        
+        saveData();
+        if (onSaveCallback) {
+            onSaveCallback();
+        }
+        document.body.removeChild(modalOverlay);
+    };
+}
+
+document.getElementById("btn-save-resultado-rapido")?.addEventListener("click", async () => {
     const match = appData.partidos.find(p => p.id === currentFastResultMatchId);
     if (!match) return;
 
-    const g1 = parseInt(document.getElementById("res-rapido-goles-local").value);
-    const g2 = parseInt(document.getElementById("res-rapido-goles-vis").value);
+    const btn = document.getElementById("btn-save-resultado-rapido");
+    const originalText = btn.innerText;
+    btn.innerText = "Guardando...";
+    btn.disabled = true;
 
-    match.goles1 = isNaN(g1) ? 0 : g1;
-    match.goles2 = isNaN(g2) ? 0 : g2;
+    try {
+        const g1 = parseInt(document.getElementById("res-rapido-goles-local").value);
+        const g2 = parseInt(document.getElementById("res-rapido-goles-vis").value);
 
-    if (!match.detalles) match.detalles = {};
-    match.detalles.estado = 'finalizado';
+        match.goles1 = isNaN(g1) ? 0 : g1;
+        match.goles2 = isNaN(g2) ? 0 : g2;
 
-    savePartidosToSupabase();
-    renderPartidosGenerados(); // Refresh UI
-    document.getElementById("modal-resultado-rapido").classList.remove("active");
+        if (!match.detalles) match.detalles = {};
+        match.detalles.estado = 'finalizado';
+        
+        // Guardar fecha y hora
+        const f = document.getElementById("res-rapido-fecha").value;
+        const h = document.getElementById("res-rapido-hora").value;
+        if (f) match.detalles.fecha = f;
+        if (h) match.detalles.hora = h;
+
+        if (match.fase === 'eliminatoria' || match.fase.startsWith('eliminatorias')) {
+            checkBracketAdvancement(match);
+        }
+
+        await savePartidosToSupabase();
+        renderPartidosGenerados(); // Refresh UI
+        document.getElementById("modal-resultado-rapido").classList.remove("active");
+    } catch (err) {
+        console.error("ERROR DETALLADO:", err);
+        alert("Error al guardar el resultado: " + (err.message || JSON.stringify(err)));
+    } finally {
+        btn.innerText = originalText;
+        btn.disabled = false;
+    }
 });
+
+// ====== MODAL ESTADISTICAS EXTRA ======
+const modalStatsExtra = document.getElementById("modal-editar-stats-extra");
+const btnCloseStatsExtra = document.getElementById("btn-close-stats-extra");
+const btnSaveStatsExtra = document.getElementById("btn-save-stats-extra");
+
+const inputStatsId = document.getElementById("edit-stats-player-id");
+const labelStatsName = document.getElementById("edit-stats-player-name");
+const inputStatsMinutos = document.getElementById("edit-stats-minutos");
+const inputStatsGoles = document.getElementById("edit-stats-goles");
+const inputStatsGolesRecibidos = document.getElementById("edit-stats-goles-recibidos");
+const groupGolesRecibidos = document.getElementById("group-stats-goles-recibidos");
+const inputStatsAmarillas = document.getElementById("edit-stats-amarillas");
+const inputStatsRojas = document.getElementById("edit-stats-rojas");
+
+window.openStatsModal = function(playerId) {
+    const player = appData.jugadores.find(p => p.id === playerId);
+    if(!player) return;
+
+    inputStatsId.value = player.id;
+    labelStatsName.textContent = player.name;
+
+    const stats = player.stats[currentTorneo];
+    inputStatsMinutos.value = stats.minutos || 0;
+    inputStatsGoles.value = stats.goles || 0;
+    inputStatsAmarillas.value = stats.amarillas || 0;
+    inputStatsRojas.value = stats.rojas || 0;
+
+    if (player.isPortero) {
+        groupGolesRecibidos.style.display = 'block';
+        inputStatsGolesRecibidos.value = stats.golesRecibidos || 0;
+    } else {
+        groupGolesRecibidos.style.display = 'none';
+        inputStatsGolesRecibidos.value = 0;
+    }
+
+    if(modalStatsExtra) modalStatsExtra.classList.add("active");
+};
+
+if (btnCloseStatsExtra) {
+    btnCloseStatsExtra.addEventListener("click", () => {
+        modalStatsExtra.classList.remove("active");
+    });
+}
+
+if (btnSaveStatsExtra) {
+    btnSaveStatsExtra.addEventListener("click", async () => {
+        const playerId = inputStatsId.value;
+        const player = appData.jugadores.find(p => p.id === playerId);
+        if(!player) return;
+
+        player.stats[currentTorneo].minutos = parseInt(inputStatsMinutos.value) || 0;
+        player.stats[currentTorneo].goles = parseInt(inputStatsGoles.value) || 0;
+        player.stats[currentTorneo].amarillas = parseInt(inputStatsAmarillas.value) || 0;
+        player.stats[currentTorneo].rojas = parseInt(inputStatsRojas.value) || 0;
+        
+        if(player.isPortero) {
+            player.stats[currentTorneo].golesRecibidos = parseInt(inputStatsGolesRecibidos.value) || 0;
+        }
+
+        modalStatsExtra.classList.remove("active");
+        
+        showLoading("Guardando cambios...");
+        await saveData();
+        hideLoading();
+        
+        // Refrescar vistas
+        showTeamDetail(appData.equipos.find(t => t.id === player.equipoId)); 
+    });
+}
+
+// ==========================================
+// DESCARGA DE IMAGEN PARA REDES SOCIALES
+// ==========================================
+window.downloadPorterosImage = function() {
+    showLoader("Generando imagen de Porteros...");
+    
+    const titleHeader = document.querySelector('#export-social-container h2');
+    if(titleHeader) titleHeader.innerHTML = 'TOP PORTEROS';
+
+    const thead = document.getElementById('export-table-head');
+    if(thead) {
+        thead.innerHTML = `
+            <tr>
+                <th>Pos</th>
+                <th>Jugador</th>
+                <th>Equipo</th>
+                <th style="text-align: center;">Goles Rec.</th>
+                <th style="text-align: center;">Minutos</th>
+                <th style="text-align: center;">Puntos</th>
+            </tr>
+        `;
+    }
+
+    setTimeout(() => {
+        const container = document.getElementById('export-social-container');
+        const tbody = document.getElementById('export-table-body');
+        const ligaName = document.getElementById('export-liga-name');
+        const logo = document.getElementById('export-logo');
+        
+        ligaName.textContent = appData.config.ligaInfo.nombre || 'FEMFUTPAL';
+        if (appData.config.ligaInfo.logo) {
+            logo.src = appData.config.ligaInfo.logo;
+        }
+        
+        let realPorteros = appData.jugadores.filter(p => p.isPortero);
+        let porterosData = realPorteros.map(realPlayer => {
+            const teamObj = appData.equipos.find(t => t.id === realPlayer.equipoId);
+            const stats = realPlayer.stats[typeof currentTorneo !== 'undefined' ? currentTorneo : 'apertura'] || {};
+            return {
+                player: realPlayer.name,
+                team: teamObj ? teamObj.nombre : 'Sin Equipo',
+                goles: stats.golesRecibidos || 0,
+                minutos: stats.minutos || 0
+            };
+        });
+
+        porterosData = porterosData.map(d => {
+            let rendimientoNum = 0;
+            if (d.minutos > 0) {
+                let puntos = d.minutos - (d.goles * 10);
+                rendimientoNum = puntos > 0 ? puntos : 0;
+            }
+            return { ...d, rendimientoNum };
+        });
+
+        porterosData.sort((a, b) => {
+            if(b.rendimientoNum !== a.rendimientoNum) return b.rendimientoNum - a.rendimientoNum;
+            if((a.goles || 0) !== (b.goles || 0)) return (a.goles || 0) - (b.goles || 0);
+            return b.minutos - a.minutos;
+        });
+
+        const top10 = porterosData.slice(0, 10);
+        
+        tbody.innerHTML = '';
+        top10.forEach((d, idx) => {
+            const posClass = idx === 0 ? "pos-gold" : idx === 1 ? "pos-silver" : idx === 2 ? "pos-bronze" : "";
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><div class="export-pos ${posClass}">${idx + 1}</div></td>
+                <td style="color:white; font-weight:700;">${d.player}</td>
+                <td style="color:#94a3b8;">${d.team}</td>
+                <td style="color:#f87171; text-align:center; font-weight:600;">${d.goles > 0 ? d.goles : '-'}</td>
+                <td style="color:#60a5fa; text-align:center; font-weight:600;">${d.minutos}</td>
+                <td style="color:#10b981; font-weight:700; text-align:center;">${d.rendimientoNum} pts</td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        container.style.zIndex = '10000';
+        container.style.top = '0';
+        container.style.left = '0';
+        
+        html2canvas(container, {
+            scale: 2,
+            backgroundColor: '#0f172a',
+            useCORS: true,
+            logging: false
+        }).then(canvas => {
+            container.style.zIndex = '-100';
+            container.style.top = '-9999px';
+            container.style.left = '-9999px';
+            
+            const link = document.createElement('a');
+            link.download = `Top_Porteros_${appData.config.ligaInfo.nombre || 'Torneo'}.png`;
+            link.href = canvas.toDataURL("image/png");
+            link.click();
+            
+            hideLoader();
+        }).catch(err => {
+            console.error(err);
+            container.style.zIndex = '-100';
+            container.style.top = '-9999px';
+            container.style.left = '-9999px';
+            hideLoader();
+            alert("Hubo un error al generar la imagen.");
+        });
+    }, 500);
+};
+
+window.downloadNovatosImage = function() {
+    showLoader("Generando imagen de Novatos...");
+    
+    const titleHeader = document.querySelector('#export-social-container h2');
+    if(titleHeader) titleHeader.innerHTML = 'TOP NOVATOS';
+
+    const thead = document.getElementById('export-table-head');
+    if(thead) {
+        thead.innerHTML = `
+            <tr>
+                <th>Pos</th>
+                <th>Jugador</th>
+                <th>Equipo</th>
+                <th style="text-align: center;">Goles</th>
+                <th style="text-align: center;">Minutos</th>
+                <th style="text-align: center;">Amarillas</th>
+                <th style="text-align: center;">Puntos</th>
+            </tr>
+        `;
+    }
+
+    setTimeout(() => {
+        const container = document.getElementById('export-social-container');
+        const tbody = document.getElementById('export-table-body');
+        const ligaName = document.getElementById('export-liga-name');
+        const logo = document.getElementById('export-logo');
+        
+        ligaName.textContent = appData.config.ligaInfo.nombre || 'FEMFUTPAL';
+        if (appData.config.ligaInfo.logo) {
+            logo.src = appData.config.ligaInfo.logo;
+        }
+        
+        let realNovatos = appData.jugadores.filter(p => p.isNovato);
+        let novatosData = realNovatos.map(realPlayer => {
+            const teamObj = appData.equipos.find(t => t.id === realPlayer.equipoId);
+            const stats = realPlayer.stats[typeof currentTorneo !== 'undefined' ? currentTorneo : 'apertura'] || {};
+            return {
+                player: realPlayer.name,
+                team: teamObj ? teamObj.nombre : 'Sin Equipo',
+                goles: stats.goles || 0,
+                minutos: stats.minutos || 0,
+                amarillas: stats.amarillas || 0,
+                rojas: stats.rojas || 0
+            };
+        });
+
+        novatosData = novatosData.map(d => {
+            let rendimientoNum = 0;
+            if (d.minutos > 0) {
+                let puntos = (d.goles * 50) + (d.minutos * 0.5) - (d.amarillas * 15) - (d.rojas * 30);
+                rendimientoNum = puntos > 0 ? puntos : 0;
+            }
+            return { ...d, rendimientoNum };
+        });
+
+        novatosData.sort((a, b) => {
+            if(b.rendimientoNum !== a.rendimientoNum) return b.rendimientoNum - a.rendimientoNum;
+            if((b.goles || 0) !== (a.goles || 0)) return (b.goles || 0) - (a.goles || 0);
+            return a.minutos - b.minutos;
+        });
+
+        const top10 = novatosData.slice(0, 10);
+        
+        tbody.innerHTML = '';
+        top10.forEach((d, idx) => {
+            const posClass = idx === 0 ? "pos-gold" : idx === 1 ? "pos-silver" : idx === 2 ? "pos-bronze" : "";
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><div class="export-pos ${posClass}">${idx + 1}</div></td>
+                <td style="color:white; font-weight:700;">${d.player}</td>
+                <td style="color:#94a3b8;">${d.team}</td>
+                <td style="color:#38bdf8; text-align:center; font-weight:600;">${d.goles > 0 ? d.goles : '-'}</td>
+                <td style="color:#60a5fa; text-align:center; font-weight:600;">${d.minutos}</td>
+                <td style="color:#fbbf24; text-align:center; font-weight:600;">${d.amarillas > 0 ? d.amarillas : '-'}</td>
+                <td style="color:#10b981; font-weight:700; text-align:center;">${Number.isInteger(d.rendimientoNum) ? d.rendimientoNum : d.rendimientoNum.toFixed(1)} pts</td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        container.style.zIndex = '10000';
+        container.style.top = '0';
+        container.style.left = '0';
+        
+        html2canvas(container, {
+            scale: 2,
+            backgroundColor: '#0f172a',
+            useCORS: true,
+            logging: false
+        }).then(canvas => {
+            container.style.zIndex = '-100';
+            container.style.top = '-9999px';
+            container.style.left = '-9999px';
+            
+            const link = document.createElement('a');
+            link.download = `Top_Novatos_${appData.config.ligaInfo.nombre || 'Torneo'}.png`;
+            link.href = canvas.toDataURL("image/png");
+            link.click();
+            
+            hideLoader();
+        }).catch(err => {
+            console.error(err);
+            container.style.zIndex = '-100';
+            container.style.top = '-9999px';
+            container.style.left = '-9999px';
+            hideLoader();
+            alert("Hubo un error al generar la imagen.");
+        });
+    }, 500);
+};
+
+setTimeout(() => {
+    if (!localStorage.getItem('cards_injected_batch4')) {
+        console.log("Inyectando tarjetas (batch 4)...");
+        const dataToInsert = [
+            { nombre: "Walter Ivan García Olivas", amarillas: 4, equipo: "Pumas FC" },
+            { nombre: "Bismar Antonio Matute Cruz", amarillas: 4, equipo: "FC Valle Del Atlético" },
+            { nombre: "Geovanny Ali Valle Joya", amarillas: 4, equipo: "FC Valle Del Atlético" },
+            { nombre: "Jahudiel Ernesto Olivas Lira", amarillas: 3, equipo: "Atlético Las Llantas" },
+            { nombre: "Héctor Javier Centeno Calero", amarillas: 3, equipo: "Pumas FC" },
+            { nombre: "Erick Samuel Garay Martinez", amarillas: 3, equipo: "Shalque 04" },
+            { nombre: "Douglas Uriel Matute Reyes", amarillas: 3, equipo: "FC Valle Del Atlético" },
+            { nombre: "Erick Nahum Gomez Dávila", amarillas: 3, equipo: "FC Los Halcones" },
+            { nombre: "Andy Jassiel Acuña Avila", amarillas: 3, equipo: "FC Rosales" },
+            { nombre: "Ervin Uriel Zeledon Carballo", amarillas: 3, equipo: "FC Valle Del Atlético" },
+            { nombre: "Wilmer Alexander Rosales Olivas", amarillas: 3, equipo: "FC Rosales" },
+            { nombre: "Anibal Alejandro Rivera Acuña", amarillas: 3, equipo: "Shalque 04" },
+            { nombre: "Erick Alberto López Pérez", amarillas: 3, equipo: "FC La Unión" },
+            { nombre: "Walter Antonio López Flores", amarillas: 3, equipo: "Shalque 04" }
+        ];
+        
+        const removeAccents = (str) => {
+            return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+        };
+
+        let added = false;
+        let notFound = [];
+        dataToInsert.forEach(item => {
+            const searchName = removeAccents(item.nombre);
+            let jugador = appData.jugadores.find(j => {
+                const jName = removeAccents(j.name || j.nombre || "");
+                return jName === searchName;
+            });
+            
+            if (!jugador) {
+                // Crear jugador en INACTIVOS (Agente Libre)
+                jugador = {
+                    id: Date.now() + "" + Math.floor(Math.random()*1000),
+                    equipoId: 'libre',
+                    nombre: item.nombre,
+                    name: item.nombre,
+                    isNovato: false,
+                    isPortero: false,
+                    status: 'baja', // Inactivo
+                    transferencias: 0,
+                    stats: {
+                        apertura: { goles: 0, amarillas: 0, rojas: 0, golesRecibidos: 0, minutos: 0 },
+                        clausura: { goles: 0, amarillas: 0, rojas: 0, golesRecibidos: 0, minutos: 0 }
+                    }
+                };
+                appData.jugadores.push(jugador);
+                // No necesitamos meterlo a un equipo específico porque va directo a inactivos.
+            }
+
+            if (jugador) {
+                jugador.stats.clausura.amarillas = item.amarillas; // Fija el valor para evitar sumar doble
+                
+                // Buscar si ya tiene eventos manuales de esta importacion
+                const prevEvents = appData.partidos.filter(p => p.detalles && p.detalles.estado === 'manual' && p.jornada === 'Importación Masiva (4 Oct)' && p.detalles.eventos && p.detalles.eventos[0].jugadorId === jugador.id);
+                
+                const cardsToAdd = item.amarillas - prevEvents.length;
+                
+                for (let i=0; i<cardsToAdd; i++) {
+                    appData.partidos.push({
+                        id: Date.now() + "_" + Math.floor(Math.random()*100000) + "_" + jugador.id + "_" + i,
+                        torneo_id: window.activeId || "da2f17be-512c-497f-94d3-1c0caab92a88",
+                        torneo: 'clausura',
+                        fase: 'manual',
+                        jornada: 'Importación Masiva (4 Oct)',
+                        equipo1Id: jugador.equipoId !== 'libre' ? jugador.equipoId : 'vacante',
+                        equipo2Id: 'vacante',
+                        goles1: null,
+                        goles2: null,
+                        detalles: {
+                            estado: 'manual',
+                            fechaProgramada: new Date().toISOString().split('T')[0],
+                            eventos: [{ tipo: 'amarilla', jugadorId: jugador.id, minuto: null }]
+                        }
+                    });
+                }
+                added = true;
+            }
+        });
+
+        if (added) {
+            saveData();
+            if (typeof renderStats === 'function') {
+                const activeTab = document.querySelector('.tab-btn.active')?.dataset?.tab;
+                if (activeTab === 'amarillas') renderStats('amarillas');
+            }
+            if (typeof renderInactivos === 'function' && document.getElementById("view-inactivos").classList.contains("active")) {
+                renderInactivos();
+            }
+            console.log("Tarjetas importadas. Creados como inactivos los que no existían.");
+        }
+        localStorage.setItem('cards_injected_batch4', 'true');
+    }
+
+    if (!localStorage.getItem('cards_injected_batch5')) {
+        console.log("Forzando inyección de tarjetas (batch 5)...");
+        const dataToInsert = [
+            { nombre: "Walter Ivan García Olivas", amarillas: 4, equipo: "Pumas FC" },
+            { nombre: "Bismar Antonio Matute Cruz", amarillas: 4, equipo: "FC Valle Del Atlético" },
+            { nombre: "Geovanny Ali Valle Joya", amarillas: 4, equipo: "FC Valle Del Atlético" },
+            { nombre: "Jahudiel Ernesto Olivas Lira", amarillas: 3, equipo: "Atlético Las Llantas" },
+            { nombre: "Héctor Javier Centeno Calero", amarillas: 3, equipo: "Pumas FC" },
+            { nombre: "Erick Samuel Garay Martinez", amarillas: 3, equipo: "Shalque 04" },
+            { nombre: "Douglas Uriel Matute Reyes", amarillas: 3, equipo: "FC Valle Del Atlético" },
+            { nombre: "Erick Nahum Gomez Dávila", amarillas: 3, equipo: "FC Los Halcones" },
+            { nombre: "Andy Jassiel Acuña Avila", amarillas: 3, equipo: "FC Rosales" },
+            { nombre: "Ervin Uriel Zeledon Carballo", amarillas: 3, equipo: "FC Valle Del Atlético" },
+            { nombre: "Wilmer Alexander Rosales Olivas", amarillas: 3, equipo: "FC Rosales" },
+            { nombre: "Anibal Alejandro Rivera Acuña", amarillas: 3, equipo: "Shalque 04" },
+            { nombre: "Erick Alberto López Pérez", amarillas: 3, equipo: "FC La Unión" },
+            { nombre: "Walter Antonio López Flores", amarillas: 3, equipo: "Shalque 04" }
+        ];
+
+        const removeAccents = (str) => {
+            return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+        };
+
+        let added = false;
+        dataToInsert.forEach(item => {
+            const searchName = removeAccents(item.nombre);
+            let jugador = appData.jugadores.find(j => {
+                const jName = removeAccents(j.name || j.nombre || "");
+                return jName === searchName;
+            });
+            
+            if (!jugador) {
+                jugador = {
+                    id: Date.now() + "" + Math.floor(Math.random()*1000),
+                    equipoId: 'libre',
+                    nombre: item.nombre,
+                    name: item.nombre,
+                    isNovato: false,
+                    isPortero: false,
+                    status: 'baja',
+                    transferencias: 0,
+                    stats: {
+                        apertura: { goles: 0, amarillas: 0, rojas: 0, golesRecibidos: 0, minutos: 0 },
+                        clausura: { goles: 0, amarillas: 0, rojas: 0, golesRecibidos: 0, minutos: 0 }
+                    }
+                };
+                appData.jugadores.push(jugador);
+            }
+
+            if (jugador) {
+                if (!jugador.stats) {
+                    jugador.stats = { apertura: {}, clausura: {} };
+                }
+                if (!jugador.stats.clausura) {
+                    jugador.stats.clausura = {};
+                }
+                
+                // Forzar el valor en Clausura
+                jugador.stats.clausura.amarillas = item.amarillas;
+                added = true;
+            }
+        });
+
+        if (added) {
+            saveData();
+            if (typeof renderStats === 'function') {
+                const activeTab = document.querySelector('.tab-btn.active')?.dataset?.tab;
+                if (activeTab === 'amarillas') renderStats('amarillas');
+            }
+            if (typeof renderInactivos === 'function' && document.getElementById("view-inactivos").classList.contains("active")) {
+                renderInactivos();
+            }
+            
+            const playersWithCards = appData.jugadores.filter(j => j.stats?.clausura?.amarillas > 0);
+            console.log("Jugadores con amarillas en Clausura:", playersWithCards.map(j => j.nombre + ' ' + j.stats.clausura.amarillas));
+            
+            alert(`¡Re-sincronización completada! Se encontraron ${playersWithCards.length} jugadores con tarjetas en memoria. Por favor verifica Clausura.`);
+        }
+        localStorage.setItem('cards_injected_batch5', 'true');
+    }
+
+    if (!localStorage.getItem('cards_injected_batch7')) {
+        console.log("Forzando inyección definitiva (batch 7)...");
+        const dataToInsert = [
+            { nombre: "Walter Ivan García Olivas", amarillas: 4, equipo: "Pumas FC" },
+            { nombre: "Bismar Antonio Matute Cruz", amarillas: 4, equipo: "FC Valle Del Atlético" },
+            { nombre: "Geovanny Ali Valle Joya", amarillas: 4, equipo: "FC Valle Del Atlético" },
+            { nombre: "Jahudiel Ernesto Olivas Lira", amarillas: 3, equipo: "Atlético Las Llantas" },
+            { nombre: "Héctor Javier Centeno Calero", amarillas: 3, equipo: "Pumas FC" },
+            { nombre: "Erick Samuel Garay Martinez", amarillas: 3, equipo: "Shalque 04" },
+            { nombre: "Douglas Uriel Matute Reyes", amarillas: 3, equipo: "FC Valle Del Atlético" },
+            { nombre: "Erick Nahum Gomez Dávila", amarillas: 3, equipo: "FC Los Halcones" },
+            { nombre: "Andy Jassiel Acuña Avila", amarillas: 3, equipo: "FC Rosales" },
+            { nombre: "Ervin Uriel Zeledon Carballo", amarillas: 3, equipo: "FC Valle Del Atlético" },
+            { nombre: "Wilmer Alexander Rosales Olivas", amarillas: 3, equipo: "FC Rosales" },
+            { nombre: "Anibal Alejandro Rivera Acuña", amarillas: 3, equipo: "Shalque 04" },
+            { nombre: "Erick Alberto López Pérez", amarillas: 3, equipo: "FC La Unión" },
+            { nombre: "Walter Antonio López Flores", amarillas: 3, equipo: "Shalque 04" }
+        ];
+
+        const removeAccents = (str) => {
+            return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+        };
+
+        let added = false;
+        dataToInsert.forEach((item, idx) => {
+            const searchName = removeAccents(item.nombre);
+            let jugador = appData.jugadores.find(j => {
+                const jName = removeAccents(j.name || j.nombre || "");
+                return jName === searchName;
+            });
+            
+            if (!jugador) {
+                jugador = {
+                    id: Date.now() + "_" + idx,
+                    equipoId: 'libre',
+                    nombre: item.nombre,
+                    name: item.nombre,
+                    isNovato: false,
+                    isPortero: false,
+                    status: 'baja',
+                    transferencias: 0,
+                    stats: {
+                        apertura: { goles: 0, amarillas: 0, rojas: 0, golesRecibidos: 0, minutos: 0 },
+                        clausura: { goles: 0, amarillas: 0, rojas: 0, golesRecibidos: 0, minutos: 0 }
+                    }
+                };
+                appData.jugadores.push(jugador);
+            }
+
+            if (jugador) {
+                if (!jugador.stats) {
+                    jugador.stats = { apertura: {goles:0, amarillas:0, rojas:0, golesRecibidos:0, minutos:0}, clausura: {goles:0, amarillas:0, rojas:0, golesRecibidos:0, minutos:0} };
+                }
+                if (!jugador.stats.clausura) {
+                    jugador.stats.clausura = {goles:0, amarillas:0, rojas:0, golesRecibidos:0, minutos:0};
+                }
+                
+                jugador.stats.clausura.amarillas = item.amarillas;
+                added = true;
+            }
+        });
+
+        if (added) {
+            saveData();
+            if (typeof renderStats === 'function') {
+                const activeTab = document.querySelector('.tab-btn.active')?.dataset?.tab;
+                if (activeTab === 'amarillas') {
+                    // Forzar trigger de click para garantizar que lea currentTorneo correctamente
+                    document.querySelector('[data-torneo="clausura"]')?.click();
+                    setTimeout(() => renderStats('amarillas'), 100);
+                }
+            }
+            if (typeof renderInactivos === 'function' && document.getElementById("view-inactivos").classList.contains("active")) {
+                renderInactivos();
+            }
+            const playersWithCards = appData.jugadores.filter(j => j.stats?.clausura?.amarillas > 0);
+            console.log("¡Batch 7 finalizado! Jugadores con amarillas:", playersWithCards.map(j => j.nombre + ':' + j.stats.clausura.amarillas));
+        }
+        localStorage.setItem('cards_injected_batch7', 'true');
+    }
+
+    if (!localStorage.getItem('cards_injected_batch8')) {
+        console.log("Forzando inyección (batch 8)...");
+        const dataToInsert = [
+            { nombre: "Walter Ivan García Olivas", amarillas: 4, equipo: "Pumas FC" },
+            { nombre: "Bismar Antonio Matute Cruz", amarillas: 4, equipo: "FC Valle Del Atlético" },
+            { nombre: "Geovanny Ali Valle Joya", amarillas: 4, equipo: "FC Valle Del Atlético" },
+            { nombre: "Jahudiel Ernesto Olivas Lira", amarillas: 3, equipo: "Atlético Las Llantas" },
+            { nombre: "Héctor Javier Centeno Calero", amarillas: 3, equipo: "Pumas FC" },
+            { nombre: "Erick Samuel Garay Martinez", amarillas: 3, equipo: "Shalque 04" },
+            { nombre: "Douglas Uriel Matute Reyes", amarillas: 3, equipo: "FC Valle Del Atlético" },
+            { nombre: "Erick Nahum Gomez Dávila", amarillas: 3, equipo: "FC Los Halcones" },
+            { nombre: "Andy Jassiel Acuña Avila", amarillas: 3, equipo: "FC Rosales" },
+            { nombre: "Ervin Uriel Zeledon Carballo", amarillas: 3, equipo: "FC Valle Del Atlético" },
+            { nombre: "Wilmer Alexander Rosales Olivas", amarillas: 3, equipo: "FC Rosales" },
+            { nombre: "Anibal Alejandro Rivera Acuña", amarillas: 3, equipo: "Shalque 04" },
+            { nombre: "Erick Alberto López Pérez", amarillas: 3, equipo: "FC La Unión" },
+            { nombre: "Walter Antonio López Flores", amarillas: 3, equipo: "Shalque 04" },
+            { nombre: "Abiel Jair Olivas Gradiz", amarillas: 2, equipo: "Atlético Las Llantas" },
+            { nombre: "Héctor Enoc Olivas Blandon", amarillas: 2, equipo: "FC Valle Del Atlético" },
+            { nombre: "Joni Antonio Gonzales H", amarillas: 2, equipo: "Diablos Rojos" },
+            { nombre: "Eliuth José García Espinoza", amarillas: 2, equipo: "FC Calera" },
+            { nombre: "Edgardo Josué Pastrana Vallecillo", amarillas: 2, equipo: "FC La Unión" },
+            { nombre: "José Alexander Ávila Rosales", amarillas: 2, equipo: "FC Rosales" },
+            { nombre: "Yerald Alcides Gomez Vallecillo", amarillas: 2, equipo: "La Sele-Saguasca" },
+            { nombre: "Wilmer Noe Rivera Córdoba", amarillas: 2, equipo: "Diablos Rojos" },
+            { nombre: "José Daniel Centeno Bustamante", amarillas: 2, equipo: "FC Los Arados" },
+            { nombre: "Jaime Ramón Calero Rivas", amarillas: 2, equipo: "FC Calera" },
+            { nombre: "Howard Jair Pineda Acuña", amarillas: 2, equipo: "Shalque 04" },
+            { nombre: "Raul Antonio Córdoba Castillo", amarillas: 2, equipo: "FC Musuli" },
+            { nombre: "Cerling Antonio Balladares Tercero", amarillas: 2, equipo: "Fénix FC" },
+            { nombre: "Lester Saúl Córdoba Calderon", amarillas: 2, equipo: "Fénix FC" },
+            { nombre: "Freddy Javier Joya López", amarillas: 2, equipo: "FC El Barrio" },
+            { nombre: "Javier Saúl Pastrana Villareyna", amarillas: 2, equipo: "Diablos Rojos" }
+        ];
+
+        const removeAccents = (str) => {
+            return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+        };
+
+        let added = false;
+        dataToInsert.forEach((item, idx) => {
+            const searchName = removeAccents(item.nombre);
+            let jugador = appData.jugadores.find(j => {
+                const jName = removeAccents(j.name || j.nombre || "");
+                return jName === searchName;
+            });
+            
+            if (!jugador) {
+                jugador = {
+                    id: Date.now() + "_b8_" + idx,
+                    equipoId: 'libre',
+                    nombre: item.nombre,
+                    name: item.nombre,
+                    isNovato: false,
+                    isPortero: false,
+                    status: 'baja',
+                    transferencias: 0,
+                    stats: {
+                        apertura: { goles: 0, amarillas: 0, rojas: 0, golesRecibidos: 0, minutos: 0 },
+                        clausura: { goles: 0, amarillas: 0, rojas: 0, golesRecibidos: 0, minutos: 0 }
+                    }
+                };
+                appData.jugadores.push(jugador);
+            }
+
+            if (jugador) {
+                if (!jugador.stats) {
+                    jugador.stats = { apertura: {goles:0, amarillas:0, rojas:0, golesRecibidos:0, minutos:0}, clausura: {goles:0, amarillas:0, rojas:0, golesRecibidos:0, minutos:0} };
+                }
+                if (!jugador.stats.clausura) {
+                    jugador.stats.clausura = {goles:0, amarillas:0, rojas:0, golesRecibidos:0, minutos:0};
+                }
+                
+                jugador.stats.clausura.amarillas = item.amarillas;
+                added = true;
+            }
+        });
+
+        if (added) {
+            saveData();
+            if (typeof renderStats === 'function') {
+                const activeTab = document.querySelector('.tab-btn.active')?.dataset?.tab;
+                if (activeTab === 'amarillas') {
+                    document.querySelector('[data-torneo="clausura"]')?.click();
+                    setTimeout(() => renderStats('amarillas'), 100);
+                }
+            }
+            if (typeof renderInactivos === 'function' && document.getElementById("view-inactivos").classList.contains("active")) {
+                renderInactivos();
+            }
+            alert("¡Tarjetas importadas con éxito! Los faltantes fueron puestos como Inactivos.");
+        }
+        localStorage.setItem('cards_injected_batch8', 'true');
+    }
+
+    if (!localStorage.getItem('cards_injected_batch9')) {
+        console.log("Forzando inyección definitiva con IDs numéricos (batch 9)...");
+        const dataToInsert = [
+            { nombre: "Walter Ivan García Olivas", amarillas: 4, equipo: "Pumas FC" },
+            { nombre: "Bismar Antonio Matute Cruz", amarillas: 4, equipo: "FC Valle Del Atlético" },
+            { nombre: "Geovanny Ali Valle Joya", amarillas: 4, equipo: "FC Valle Del Atlético" },
+            { nombre: "Jahudiel Ernesto Olivas Lira", amarillas: 3, equipo: "Atlético Las Llantas" },
+            { nombre: "Héctor Javier Centeno Calero", amarillas: 3, equipo: "Pumas FC" },
+            { nombre: "Erick Samuel Garay Martinez", amarillas: 3, equipo: "Shalque 04" },
+            { nombre: "Douglas Uriel Matute Reyes", amarillas: 3, equipo: "FC Valle Del Atlético" },
+            { nombre: "Erick Nahum Gomez Dávila", amarillas: 3, equipo: "FC Los Halcones" },
+            { nombre: "Andy Jassiel Acuña Avila", amarillas: 3, equipo: "FC Rosales" },
+            { nombre: "Ervin Uriel Zeledon Carballo", amarillas: 3, equipo: "FC Valle Del Atlético" },
+            { nombre: "Wilmer Alexander Rosales Olivas", amarillas: 3, equipo: "FC Rosales" },
+            { nombre: "Anibal Alejandro Rivera Acuña", amarillas: 3, equipo: "Shalque 04" },
+            { nombre: "Erick Alberto López Pérez", amarillas: 3, equipo: "FC La Unión" },
+            { nombre: "Walter Antonio López Flores", amarillas: 3, equipo: "Shalque 04" },
+            { nombre: "Abiel Jair Olivas Gradiz", amarillas: 2, equipo: "Atlético Las Llantas" },
+            { nombre: "Héctor Enoc Olivas Blandon", amarillas: 2, equipo: "FC Valle Del Atlético" },
+            { nombre: "Joni Antonio Gonzales H", amarillas: 2, equipo: "Diablos Rojos" },
+            { nombre: "Eliuth José García Espinoza", amarillas: 2, equipo: "FC Calera" },
+            { nombre: "Edgardo Josué Pastrana Vallecillo", amarillas: 2, equipo: "FC La Unión" },
+            { nombre: "José Alexander Ávila Rosales", amarillas: 2, equipo: "FC Rosales" },
+            { nombre: "Yerald Alcides Gomez Vallecillo", amarillas: 2, equipo: "La Sele-Saguasca" },
+            { nombre: "Wilmer Noe Rivera Córdoba", amarillas: 2, equipo: "Diablos Rojos" },
+            { nombre: "José Daniel Centeno Bustamante", amarillas: 2, equipo: "FC Los Arados" },
+            { nombre: "Jaime Ramón Calero Rivas", amarillas: 2, equipo: "FC Calera" },
+            { nombre: "Howard Jair Pineda Acuña", amarillas: 2, equipo: "Shalque 04" },
+            { nombre: "Raul Antonio Córdoba Castillo", amarillas: 2, equipo: "FC Musuli" },
+            { nombre: "Cerling Antonio Balladares Tercero", amarillas: 2, equipo: "Fénix FC" },
+            { nombre: "Lester Saúl Córdoba Calderon", amarillas: 2, equipo: "Fénix FC" },
+            { nombre: "Freddy Javier Joya López", amarillas: 2, equipo: "FC El Barrio" },
+            { nombre: "Javier Saúl Pastrana Villareyna", amarillas: 2, equipo: "Diablos Rojos" }
+        ];
+
+        const removeAccents = (str) => {
+            return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+        };
+
+        // Limpiar jugadores con IDs inválidos (Strings) que bloquean la subida
+        appData.jugadores = appData.jugadores.filter(j => typeof j.id === 'number' || (typeof j.id === 'string' && !j.id.includes('_')));
+
+        let added = false;
+        dataToInsert.forEach((item, idx) => {
+            const searchName = removeAccents(item.nombre);
+            let jugador = appData.jugadores.find(j => {
+                const jName = removeAccents(j.name || j.nombre || "");
+                return jName === searchName;
+            });
+            
+            if (!jugador) {
+                // ¡ID Numérico indispensable! Si no Supabase da error 400
+                jugador = {
+                    id: Date.now() + (idx * 100), 
+                    equipoId: 'libre',
+                    nombre: item.nombre,
+                    name: item.nombre,
+                    isNovato: false,
+                    isPortero: false,
+                    status: 'baja',
+                    transferencias: 0,
+                    stats: {
+                        apertura: { goles: 0, amarillas: 0, rojas: 0, golesRecibidos: 0, minutos: 0 },
+                        clausura: { goles: 0, amarillas: 0, rojas: 0, golesRecibidos: 0, minutos: 0 }
+                    }
+                };
+                appData.jugadores.push(jugador);
+            }
+
+            if (jugador) {
+                if (!jugador.stats) {
+                    jugador.stats = { apertura: {goles:0, amarillas:0, rojas:0, golesRecibidos:0, minutos:0}, clausura: {goles:0, amarillas:0, rojas:0, golesRecibidos:0, minutos:0} };
+                }
+                if (!jugador.stats.clausura) {
+                    jugador.stats.clausura = {goles:0, amarillas:0, rojas:0, golesRecibidos:0, minutos:0};
+                }
+                
+                jugador.stats.clausura.amarillas = item.amarillas;
+                added = true;
+            }
+        });
+
+        if (added) {
+            saveData();
+            if (typeof renderStats === 'function') {
+                const activeTab = document.querySelector('.tab-btn.active')?.dataset?.tab;
+                if (activeTab === 'amarillas') {
+                    document.querySelector('[data-torneo="clausura"]')?.click();
+                    setTimeout(() => renderStats('amarillas'), 100);
+                }
+            }
+            if (typeof renderInactivos === 'function' && document.getElementById("view-inactivos").classList.contains("active")) {
+                renderInactivos();
+            }
+            alert("¡Importación definitiva 100% completada! Puedes verificar la tabla Clausura.");
+        }
+        localStorage.setItem('cards_injected_batch9', 'true');
+    }
+
+}, 3000);
+
+// Lógica para el buscador de estadísticas
+document.addEventListener('DOMContentLoaded', () => {
+    const searchInput = document.getElementById('stats-search-input');
+    if (searchInput) {
+        searchInput.addEventListener('input', function(e) {
+            const searchTerm = e.target.value.toLowerCase().trim();
+            const tableRows = document.querySelectorAll('.data-table tbody tr');
+            
+            tableRows.forEach(row => {
+                // Si la fila es el mensaje de "No hay datos", no la ocultamos
+                if (row.cells.length === 1 && row.cells[0].colSpan === 4) return;
+                
+                const text = row.textContent.toLowerCase();
+                if (text.includes(searchTerm)) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        });
+    }
+});
+
+
+// INYECCIÓN DE CALENDARIO CLAUSURA
+setTimeout(async () => {
+    if (!localStorage.getItem('calendario_clausura_injected_final_2')) {
+        const removeAccents = (str) => str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+        const matchesData = [
+  {
+    "jornada": 1,
+    "eq1": "1 PUMAS FC",
+    "eq2": "FC VALLE DEL ATLÉTICO"
+  },
+  {
+    "jornada": 1,
+    "eq1": "2 SHALQUE 04",
+    "eq2": "FC LA CONCHA"
+  },
+  {
+    "jornada": 1,
+    "eq1": "3 FC CALERA",
+    "eq2": "ATLÉTICO LAS LLANTAS"
+  },
+  {
+    "jornada": 1,
+    "eq1": "4 FK BODØ/GLIMT",
+    "eq2": "LA SELE-SAGUASCA"
+  },
+  {
+    "jornada": 1,
+    "eq1": "5 FC ROSALES",
+    "eq2": "EL BARRIO"
+  },
+  {
+    "jornada": 1,
+    "eq1": "6 FC MUSULI",
+    "eq2": "FC LA UNIÓN"
+  },
+  {
+    "jornada": 1,
+    "eq1": "7 PC GALAXY",
+    "eq2": "FC ACADEMIA"
+  },
+  {
+    "jornada": 1,
+    "eq1": "8 FC LA ISLA",
+    "eq2": "FC FENIX"
+  },
+  {
+    "jornada": 1,
+    "eq1": "LOS ALCONES FC",
+    "eq2": "vacante"
+  },
+  {
+    "jornada": 2,
+    "eq1": "1 SHALQUE 04",
+    "eq2": "ATLÉTICO LAS LLANTAS"
+  },
+  {
+    "jornada": 2,
+    "eq1": "2 FC FENIX",
+    "eq2": "EL BARRIO"
+  },
+  {
+    "jornada": 2,
+    "eq1": "3 FC ROSALES",
+    "eq2": "FC VALLE DEL ATLÉTICO"
+  },
+  {
+    "jornada": 2,
+    "eq1": "4 FC CALERA",
+    "eq2": "LOS ALCONES FC"
+  },
+  {
+    "jornada": 2,
+    "eq1": "5 FK BODØ/GLIMT",
+    "eq2": "FC LA CONCHA"
+  },
+  {
+    "jornada": 2,
+    "eq1": "6 FC LA ISLA",
+    "eq2": "LA SELE-SAGUASCA"
+  },
+  {
+    "jornada": 2,
+    "eq1": "7 PUMAS FC",
+    "eq2": "FC ACADEMIA"
+  },
+  {
+    "jornada": 2,
+    "eq1": "8 PC GALAXY",
+    "eq2": "FC LA UNIÓN"
+  },
+  {
+    "jornada": 2,
+    "eq1": "FC MUSULI",
+    "eq2": "vacante"
+  },
+  {
+    "jornada": 3,
+    "eq1": "1 FC LA ISLA",
+    "eq2": "FC LA CONCHA"
+  },
+  {
+    "jornada": 3,
+    "eq1": "2 FC ROSALES",
+    "eq2": "FC ACADEMIA"
+  },
+  {
+    "jornada": 3,
+    "eq1": "3 SHALQUE 04",
+    "eq2": "LOS ALCONES FC"
+  },
+  {
+    "jornada": 3,
+    "eq1": "4 FC FENIX",
+    "eq2": "FC VALLE DEL ATLÉTICO"
+  },
+  {
+    "jornada": 3,
+    "eq1": "5 PUMAS FC",
+    "eq2": "FC LA UNIÓN"
+  },
+  {
+    "jornada": 3,
+    "eq1": "6 FK BODØ/GLIMT",
+    "eq2": "ATLÉTICO LAS LLANTAS"
+  },
+  {
+    "jornada": 3,
+    "eq1": "7 EL BARRIO",
+    "eq2": "LA SELE-SAGUASCA"
+  },
+  {
+    "jornada": 3,
+    "eq1": "8 PC GALAXY",
+    "eq2": "FC MUSULI"
+  },
+  {
+    "jornada": 3,
+    "eq1": "FC CALERA",
+    "eq2": "vacante"
+  },
+  {
+    "jornada": 4,
+    "eq1": "1 FK BODØ/GLIMT",
+    "eq2": "LOS ALCONES FC"
+  },
+  {
+    "jornada": 4,
+    "eq1": "2 PUMAS FC",
+    "eq2": "FC MUSULI"
+  },
+  {
+    "jornada": 4,
+    "eq1": "3 EL BARRIO",
+    "eq2": "FC LA CONCHA"
+  },
+  {
+    "jornada": 4,
+    "eq1": "4 FC LA ISLA",
+    "eq2": "ATLÉTICO LAS LLANTAS"
+  },
+  {
+    "jornada": 4,
+    "eq1": "5 SHALQUE 04",
+    "eq2": "FC CALERA"
+  },
+  {
+    "jornada": 4,
+    "eq1": "6 FC FENIX",
+    "eq2": "FC ACADEMIA"
+  },
+  {
+    "jornada": 4,
+    "eq1": "7 FC ROSALES",
+    "eq2": "FC LA UNIÓN"
+  },
+  {
+    "jornada": 4,
+    "eq1": "8 LA SELE-SAGUASCA",
+    "eq2": "FC VALLE DEL ATLÉTICO"
+  },
+  {
+    "jornada": 4,
+    "eq1": "PC GALAXY",
+    "eq2": "vacante"
+  },
+  {
+    "jornada": 5,
+    "eq1": "1 FC FENIX",
+    "eq2": "FC LA UNIÓN"
+  },
+  {
+    "jornada": 5,
+    "eq1": "2 FC LA ISLA",
+    "eq2": "LOS ALCONES FC"
+  },
+  {
+    "jornada": 5,
+    "eq1": "3 LA SELE-SAGUASCA",
+    "eq2": "FC ACADEMIA"
+  },
+  {
+    "jornada": 5,
+    "eq1": "4 PUMAS FC",
+    "eq2": "PC GALAXY"
+  },
+  {
+    "jornada": 5,
+    "eq1": "5 FC VALLE DEL ATLÉTICO",
+    "eq2": "FC LA CONCHA"
+  },
+  {
+    "jornada": 5,
+    "eq1": "6 EL BARRIO",
+    "eq2": "ATLÉTICO LAS LLANTAS"
+  },
+  {
+    "jornada": 5,
+    "eq1": "7 FK BODØ/GLIMT",
+    "eq2": "FC CALERA"
+  },
+  {
+    "jornada": 5,
+    "eq1": "8 FC ROSALES",
+    "eq2": "FC MUSULI"
+  },
+  {
+    "jornada": 5,
+    "eq1": "SHALQUE 04",
+    "eq2": "vacante"
+  },
+  {
+    "jornada": 6,
+    "eq1": "1 FC ROSALES",
+    "eq2": "PC GALAXY"
+  },
+  {
+    "jornada": 6,
+    "eq1": "2 LA SELE-SAGUASCA",
+    "eq2": "FC LA UNIÓN"
+  },
+  {
+    "jornada": 6,
+    "eq1": "3 FC FENIX",
+    "eq2": "FC MUSULI"
+  },
+  {
+    "jornada": 6,
+    "eq1": "4 FC LA CONCHA",
+    "eq2": "FC ACADEMIA"
+  },
+  {
+    "jornada": 6,
+    "eq1": "5 EL BARRIO",
+    "eq2": "LOS ALCONES FC"
+  },
+  {
+    "jornada": 6,
+    "eq1": "6 FC LA ISLA",
+    "eq2": "FC CALERA"
+  },
+  {
+    "jornada": 6,
+    "eq1": "7 FC VALLE DEL ATLÉTICO",
+    "eq2": "ATLÉTICO LAS LLANTAS"
+  },
+  {
+    "jornada": 6,
+    "eq1": "8 FK BODØ/GLIMT",
+    "eq2": "SHALQUE 04"
+  },
+  {
+    "jornada": 6,
+    "eq1": "PUMAS FC",
+    "eq2": "vacante"
+  },
+  {
+    "jornada": 7,
+    "eq1": "1 EL BARRIO",
+    "eq2": "FC CALERA"
+  },
+  {
+    "jornada": 7,
+    "eq1": "2 FC FENIX",
+    "eq2": "PC GALAXY"
+  },
+  {
+    "jornada": 7,
+    "eq1": "3 FC ROSALES",
+    "eq2": "PUMAS FC"
+  },
+  {
+    "jornada": 7,
+    "eq1": "4 FC LA ISLA",
+    "eq2": "SHALQUE 04"
+  },
+  {
+    "jornada": 7,
+    "eq1": "5 LA SELE-SAGUASCA",
+    "eq2": "FC MUSULI"
+  },
+  {
+    "jornada": 7,
+    "eq1": "6 FC VALLE DEL ATLÉTICO",
+    "eq2": "LOS ALCONES FC"
+  },
+  {
+    "jornada": 7,
+    "eq1": "7 FC LA CONCHA",
+    "eq2": "FC LA UNIÓN"
+  },
+  {
+    "jornada": 7,
+    "eq1": "8 FC ACADEMIA",
+    "eq2": "ATLÉTICO LAS LLANTAS"
+  },
+  {
+    "jornada": 7,
+    "eq1": "FK BODØ/GLIMT",
+    "eq2": "vacante"
+  },
+  {
+    "jornada": 8,
+    "eq1": "1 FC ACADEMIA",
+    "eq2": "LOS ALCONES FC"
+  },
+  {
+    "jornada": 8,
+    "eq1": "2 FC VALLE DEL ATLÉTICO",
+    "eq2": "FC CALERA"
+  },
+  {
+    "jornada": 8,
+    "eq1": "3 FC LA ISLA",
+    "eq2": "FK BODØ/GLIMT"
+  },
+  {
+    "jornada": 8,
+    "eq1": "4 FC LA CONCHA",
+    "eq2": "FC MUSULI"
+  },
+  {
+    "jornada": 8,
+    "eq1": "5 FC FENIX",
+    "eq2": "PUMAS FC"
+  },
+  {
+    "jornada": 8,
+    "eq1": "6 EL BARRIO",
+    "eq2": "SHALQUE 04"
+  },
+  {
+    "jornada": 8,
+    "eq1": "7 LA SELE-SAGUASCA",
+    "eq2": "PC GALAXY"
+  },
+  {
+    "jornada": 8,
+    "eq1": "8 ATLÉTICO LAS LLANTAS",
+    "eq2": "FC LA UNIÓN"
+  },
+  {
+    "jornada": 8,
+    "eq1": "FC ROSALES",
+    "eq2": "vacante"
+  },
+  {
+    "jornada": 9,
+    "eq1": "1 ATLÉTICO LAS LLANTAS",
+    "eq2": "FC MUSULI"
+  },
+  {
+    "jornada": 9,
+    "eq1": "2 EL BARRIO",
+    "eq2": "FK BODØ/GLIMT"
+  },
+  {
+    "jornada": 9,
+    "eq1": "3 FC LA UNIÓN",
+    "eq2": "LOS ALCONES FC"
+  },
+  {
+    "jornada": 9,
+    "eq1": "4 FC FENIX",
+    "eq2": "FC ROSALES"
+  },
+  {
+    "jornada": 9,
+    "eq1": "5 FC ACADEMIA",
+    "eq2": "FC CALERA"
+  },
+  {
+    "jornada": 9,
+    "eq1": "6 FC LA CONCHA",
+    "eq2": "PC GALAXY"
+  },
+  {
+    "jornada": 9,
+    "eq1": "7 FC VALLE DEL ATLÉTICO",
+    "eq2": "SHALQUE 04"
+  },
+  {
+    "jornada": 9,
+    "eq1": "8 LA SELE-SAGUASCA",
+    "eq2": "PUMAS FC"
+  },
+  {
+    "jornada": 9,
+    "eq1": "FC LA ISLA",
+    "eq2": "vacante"
+  },
+  {
+    "jornada": 10,
+    "eq1": "1 LA SELE-SAGUASCA",
+    "eq2": "FC ROSALES"
+  },
+  {
+    "jornada": 10,
+    "eq1": "2 ATLÉTICO LAS LLANTAS",
+    "eq2": "PC GALAXY"
+  },
+  {
+    "jornada": 10,
+    "eq1": "3 FC LA UNIÓN",
+    "eq2": "FC CALERA"
+  },
+  {
+    "jornada": 10,
+    "eq1": "4 LOS ALCONES FC",
+    "eq2": "FC MUSULI"
+  },
+  {
+    "jornada": 10,
+    "eq1": "5 FC ACADEMIA",
+    "eq2": "SHALQUE 04"
+  },
+  {
+    "jornada": 10,
+    "eq1": "6 FC LA CONCHA",
+    "eq2": "PUMAS FC"
+  },
+  {
+    "jornada": 10,
+    "eq1": "7 EL BARRIO",
+    "eq2": "FC LA ISLA"
+  },
+  {
+    "jornada": 10,
+    "eq1": "8 FC VALLE DEL ATLÉTICO",
+    "eq2": "FK BODØ/GLIMT"
+  },
+  {
+    "jornada": 10,
+    "eq1": "FC FENIX",
+    "eq2": "vacante"
+  },
+  {
+    "jornada": 11,
+    "eq1": "1 FC VALLE DEL ATLÉTICO",
+    "eq2": "FC LA ISLA"
+  },
+  {
+    "jornada": 11,
+    "eq1": "2 FC MUSULI",
+    "eq2": "FC CALERA"
+  },
+  {
+    "jornada": 11,
+    "eq1": "3 LOS ALCONES FC",
+    "eq2": "PC GALAXY"
+  },
+  {
+    "jornada": 11,
+    "eq1": "4 FC LA UNIÓN",
+    "eq2": "SHALQUE 04"
+  },
+  {
+    "jornada": 11,
+    "eq1": "5 ATLÉTICO LAS LLANTAS",
+    "eq2": "PUMAS FC"
+  },
+  {
+    "jornada": 11,
+    "eq1": "6 FC LA CONCHA",
+    "eq2": "FC ROSALES"
+  },
+  {
+    "jornada": 11,
+    "eq1": "7 LA SELE-SAGUASCA",
+    "eq2": "FC FENIX"
+  },
+  {
+    "jornada": 11,
+    "eq1": "8 FC ACADEMIA",
+    "eq2": "FK BODØ/GLIMT"
+  },
+  {
+    "jornada": 11,
+    "eq1": "EL BARRIO",
+    "eq2": "vacante"
+  },
+  {
+    "jornada": 12,
+    "eq1": "1 FC LA CONCHA",
+    "eq2": "FC FENIX"
+  },
+  {
+    "jornada": 12,
+    "eq1": "2 ATLÉTICO LAS LLANTAS",
+    "eq2": "FC ROSALES"
+  },
+  {
+    "jornada": 12,
+    "eq1": "3 FC VALLE DEL ATLÉTICO",
+    "eq2": "EL BARRIO"
+  },
+  {
+    "jornada": 12,
+    "eq1": "4 FC CALERA",
+    "eq2": "PC GALAXY"
+  },
+  {
+    "jornada": 12,
+    "eq1": "5 FC ACADEMIA",
+    "eq2": "FC LA ISLA"
+  },
+  {
+    "jornada": 12,
+    "eq1": "6 FC LA UNIÓN",
+    "eq2": "FK BODØ/GLIMT"
+  },
+  {
+    "jornada": 12,
+    "eq1": "7 LOS ALCONES FC",
+    "eq2": "PUMAS FC"
+  },
+  {
+    "jornada": 12,
+    "eq1": "8 FC MUSULI",
+    "eq2": "SHALQUE 04"
+  },
+  {
+    "jornada": 12,
+    "eq1": "LA SELE-SAGUASCA",
+    "eq2": "vacante"
+  },
+  {
+    "jornada": 13,
+    "eq1": "1 FC ACADEMIA",
+    "eq2": "EL BARRIO"
+  },
+  {
+    "jornada": 13,
+    "eq1": "2 FC LA CONCHA",
+    "eq2": "LA SELE-SAGUASCA"
+  },
+  {
+    "jornada": 13,
+    "eq1": "3 ATLÉTICO LAS LLANTAS",
+    "eq2": "FC FENIX"
+  },
+  {
+    "jornada": 13,
+    "eq1": "4 FC LA UNIÓN",
+    "eq2": "FC LA ISLA"
+  },
+  {
+    "jornada": 13,
+    "eq1": "5 LOS ALCONES FC",
+    "eq2": "FC ROSALES"
+  },
+  {
+    "jornada": 13,
+    "eq1": "6 PC GALAXY",
+    "eq2": "SHALQUE 04"
+  },
+  {
+    "jornada": 13,
+    "eq1": "7 FC MUSULI",
+    "eq2": "FK BODØ/GLIMT"
+  },
+  {
+    "jornada": 13,
+    "eq1": "8 FC CALERA",
+    "eq2": "PUMAS FC"
+  },
+  {
+    "jornada": 13,
+    "eq1": "FC VALLE DEL ATLÉTICO",
+    "eq2": "vacante"
+  },
+  {
+    "jornada": 14,
+    "eq1": "1 SHALQUE 04",
+    "eq2": "PUMAS FC"
+  },
+  {
+    "jornada": 14,
+    "eq1": "2 FC ACADEMIA",
+    "eq2": "FC VALLE DEL ATLÉTICO"
+  },
+  {
+    "jornada": 14,
+    "eq1": "3 FC MUSULI",
+    "eq2": "FC LA ISLA"
+  },
+  {
+    "jornada": 14,
+    "eq1": "4 ATLÉTICO LAS LLANTAS",
+    "eq2": "LA SELE-SAGUASCA"
+  },
+  {
+    "jornada": 14,
+    "eq1": "5 PC GALAXY",
+    "eq2": "FK BODØ/GLIMT"
+  },
+  {
+    "jornada": 14,
+    "eq1": "6 FC CALERA",
+    "eq2": "FC ROSALES"
+  },
+  {
+    "jornada": 14,
+    "eq1": "7 LOS ALCONES FC",
+    "eq2": "FC FENIX"
+  },
+  {
+    "jornada": 14,
+    "eq1": "8 FC LA UNIÓN",
+    "eq2": "EL BARRIO"
+  },
+  {
+    "jornada": 14,
+    "eq1": "FC LA CONCHA",
+    "eq2": "vacante"
+  },
+  {
+    "jornada": 15,
+    "eq1": "1 FC LA UNIÓN",
+    "eq2": "FC VALLE DEL ATLÉTICO"
+  },
+  {
+    "jornada": 15,
+    "eq1": "2 PUMAS FC",
+    "eq2": "FK BODØ/GLIMT"
+  },
+  {
+    "jornada": 15,
+    "eq1": "3 ATLÉTICO LAS LLANTAS",
+    "eq2": "FC LA CONCHA"
+  },
+  {
+    "jornada": 15,
+    "eq1": "4 FC MUSULI",
+    "eq2": "EL BARRIO"
+  },
+  {
+    "jornada": 15,
+    "eq1": "5 PC GALAXY",
+    "eq2": "FC LA ISLA"
+  },
+  {
+    "jornada": 15,
+    "eq1": "6 LOS ALCONES FC",
+    "eq2": "LA SELE-SAGUASCA"
+  },
+  {
+    "jornada": 15,
+    "eq1": "7 SHALQUE 04",
+    "eq2": "FC ROSALES"
+  },
+  {
+    "jornada": 15,
+    "eq1": "8 FC CALERA",
+    "eq2": "FC FENIX"
+  },
+  {
+    "jornada": 15,
+    "eq1": "FC ACADEMIA",
+    "eq2": "vacante"
+  },
+  {
+    "jornada": 16,
+    "eq1": "1 FC CALERA",
+    "eq2": "LA SELE-SAGUASCA"
+  },
+  {
+    "jornada": 16,
+    "eq1": "2 FC LA UNIÓN",
+    "eq2": "FC ACADEMIA"
+  },
+  {
+    "jornada": 16,
+    "eq1": "3 SHALQUE 04",
+    "eq2": "FC FENIX"
+  },
+  {
+    "jornada": 16,
+    "eq1": "4 FK BODØ/GLIMT",
+    "eq2": "FC ROSALES"
+  },
+  {
+    "jornada": 16,
+    "eq1": "5 FC MUSULI",
+    "eq2": "FC VALLE DEL ATLÉTICO"
+  },
+  {
+    "jornada": 16,
+    "eq1": "6 PUMAS FC",
+    "eq2": "FC LA ISLA"
+  },
+  {
+    "jornada": 16,
+    "eq1": "7 LOS ALCONES FC",
+    "eq2": "FC LA CONCHA"
+  },
+  {
+    "jornada": 16,
+    "eq1": "8 PC GALAXY",
+    "eq2": "EL BARRIO"
+  },
+  {
+    "jornada": 16,
+    "eq1": "ATLÉTICO LAS LLANTAS",
+    "eq2": "vacante"
+  },
+  {
+    "jornada": 17,
+    "eq1": "1 FC MUSULI",
+    "eq2": "FC ACADEMIA"
+  },
+  {
+    "jornada": 17,
+    "eq1": "2 LOS ALCONES FC",
+    "eq2": "ATLÉTICO LAS LLANTAS"
+  },
+  {
+    "jornada": 17,
+    "eq1": "3 PUMAS FC",
+    "eq2": "EL BARRIO"
+  },
+  {
+    "jornada": 17,
+    "eq1": "4 PC GALAXY",
+    "eq2": "FC VALLE DEL ATLÉTICO"
+  },
+  {
+    "jornada": 17,
+    "eq1": "5 SHALQUE 04",
+    "eq2": "LA SELE-SAGUASCA"
+  },
+  {
+    "jornada": 17,
+    "eq1": "6 FK BODØ/GLIMT",
+    "eq2": "FC FENIX"
+  },
+  {
+    "jornada": 17,
+    "eq1": "7 FC CALERA",
+    "eq2": "FC LA CONCHA"
+  },
+  {
+    "jornada": 17,
+    "eq1": "8 FC ROSALES",
+    "eq2": "FC LA ISLA"
+  },
+  {
+    "jornada": 17,
+    "eq1": "FC LA UNIÓN",
+    "eq2": "vacante"
+  }
+];
+        let idCounter = Date.now();
+        let added = false;
+        
+        // Limpiamos si hay algo viejo generado
+        appData.partidos = appData.partidos.filter(p => !(p.torneo === 'clausura' && p.calendario_nombre === 'Torneo Principal' && p.fase === 'liga'));
+
+        matchesData.forEach(item => {
+            let eq1 = 'vacante';
+            let eq2 = 'vacante';
+
+            if (item.eq1 !== 'vacante') {
+                const searchName1 = removeAccents(item.eq1).replace(/\d+\s*/, '');
+                // Intento exacto
+                let team1 = appData.equipos.find(e => removeAccents(e.nombre) === searchName1);
+                // Intento parcial (ej: PC Galaxy vs P. Club Galaxy)
+                if (!team1) team1 = appData.equipos.find(e => removeAccents(e.nombre).includes(searchName1) || searchName1.includes(removeAccents(e.nombre)));
+                
+                if (team1) eq1 = team1.id;
+                else console.warn('Equipo no encontrado: ' + item.eq1);
+            }
+
+            if (item.eq2 !== 'vacante') {
+                const searchName2 = removeAccents(item.eq2);
+                let team2 = appData.equipos.find(e => removeAccents(e.nombre) === searchName2);
+                if (!team2) team2 = appData.equipos.find(e => removeAccents(e.nombre).includes(searchName2) || searchName2.includes(removeAccents(e.nombre)));
+                
+                if (team2) eq2 = team2.id;
+                else console.warn('Equipo no encontrado: ' + item.eq2);
+            }
+
+            appData.partidos.push({
+                id: (idCounter++).toString(),
+                torneo: 'clausura',
+                calendario_nombre: 'Torneo Principal',
+                fase: 'liga',
+                jornada: item.jornada,
+                equipo1Id: eq1,
+                equipo2Id: eq2,
+                goles1: null,
+                goles2: null,
+                grupo: 'unico'
+            });
+            added = true;
+        });
+
+        if (added) {
+            await saveData();
+            localStorage.setItem('calendario_clausura_injected_final_2', 'true');
+            if (typeof renderSorteos === 'function') {
+                const sorteosView = document.getElementById('view-sorteos');
+                if(sorteosView && sorteosView.classList.contains('active')){
+                    renderSorteos();
+                }
+            }
+            alert('¡El calendario oficial del Clausura 2026 (17 Jornadas) ha sido importado con éxito!');
+        }
+    }
+}, 4500);
