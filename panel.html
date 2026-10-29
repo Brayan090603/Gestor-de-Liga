@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/style.css?v=3">
+    <link rel="stylesheet" href="css/style.css?v=7">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="manifest" href="manifest.json">
 </head>
@@ -71,7 +71,7 @@
                     <i class="fa-solid fa-square" style="color: #FCD34D;"></i> Tarjetas Amarillas
                 </a>
                 <a href="#" class="nav-item" data-view="stats" data-tab="rojas">
-                    <i class="fa-solid fa-square" style="color: #F87171;"></i> Tarjetas Rojas
+                    <i class="fa-solid fa-square" style="color: #F87171;"></i> Tarjetas Rojas / Sancionados
                 </a>
                 <a href="#" class="nav-item" data-view="stats" data-tab="novatos">
                     <i class="fa-solid fa-seedling"></i> Novatos
@@ -427,41 +427,104 @@
                                         </div>
                                     </div>
                                     
+                                    <!-- SECCIÓN DINÁMICA DE SELECCIÓN DE EQUIPOS -->
+                                    <div class="sorteo-equipos-wrapper">
+                                        <!-- Header de Equipos con Contadores y Botón Nuevo Equipo -->
+                                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin-bottom: 18px;">
+                                            <div>
+                                                <h4 style="margin: 0; font-size: 1.15rem; color: #f8fafc; display: flex; align-items: center; gap: 8px;">
+                                                    <i class="fa-solid fa-users-gear" style="color: #3b82f6;"></i> Equipos Participantes
+                                                </h4>
+                                                <p style="margin: 4px 0 0 0; color: #94a3b8; font-size: 0.88rem;">
+                                                    Selecciona qué equipos disputarán este calendario o agrega nuevos si faltan.
+                                                </p>
+                                            </div>
+
+                                            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                                                <!-- Badge contador -->
+                                                <span id="badge-equipos-count" style="padding: 6px 14px; border-radius: 20px; font-size: 0.85rem; font-weight: 700; background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3);">
+                                                    <i class="fa-solid fa-circle-check"></i> <span id="num-equipos-seleccionados">0</span> Seleccionados
+                                                </span>
+
+                                                <!-- Botón Agregar Nuevo Equipo Rápido -->
+                                                <button type="button" id="btn-quick-add-team" class="btn-primary" style="padding: 7px 14px; font-size: 0.85rem; border-radius: 8px; background: #10b981; border: none; cursor: pointer;">
+                                                    <i class="fa-solid fa-plus"></i> Nuevo Equipo
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <!-- Formulario flotante de Agregar Equipo Rápido (Inline) -->
+                                        <div id="quick-add-team-panel" style="display: none; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 10px; padding: 15px; margin-bottom: 15px;">
+                                            <h5 style="margin: 0 0 10px 0; color: #34d399; font-size: 0.95rem;"><i class="fa-solid fa-shield-plus"></i> Registrar Nuevo Equipo Rápido</h5>
+                                            <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end;">
+                                                <div style="flex: 2; min-width: 180px;">
+                                                    <label style="font-size: 0.8rem; color: #cbd5e1; display: block; margin-bottom: 4px;">Nombre del Equipo</label>
+                                                    <input type="text" id="quick-team-name" placeholder="Ej: Real Madrid FC" style="width: 100%; padding: 8px 12px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; color: white;">
+                                                </div>
+                                                <div style="flex: 2; min-width: 180px;">
+                                                    <label style="font-size: 0.8rem; color: #cbd5e1; display: block; margin-bottom: 4px;">Logo / Escudo (Opcional)</label>
+                                                    <input type="file" id="quick-team-logo" accept="image/*" style="width: 100%; padding: 6px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; color: #94a3b8; font-size: 0.8rem;">
+                                                </div>
+                                                <div style="display: flex; gap: 8px;">
+                                                    <button type="button" id="btn-save-quick-team" class="btn-primary" style="padding: 8px 16px; background: #10b981; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;">Guardar</button>
+                                                    <button type="button" id="btn-cancel-quick-team" class="btn-secondary" style="padding: 8px 14px; border-radius: 6px; cursor: pointer;">Cancelar</button>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Barra de Herramientas: Buscador y Filtros Rápidos -->
+                                        <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-bottom: 15px; background: rgba(0,0,0,0.25); padding: 12px; border-radius: 10px;">
+                                            <!-- Buscador -->
+                                            <div style="flex: 1; min-width: 180px; position: relative;">
+                                                <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #64748b; font-size: 0.85rem;"></i>
+                                                <input type="text" id="filter-sorteo-equipos" placeholder="Buscar equipo..." style="width: 100%; padding: 8px 12px 8px 34px; background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: white; font-size: 0.88rem; outline: none;">
+                                            </div>
+
+                                            <!-- Botones rápidos de selección -->
+                                            <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                                                <button type="button" class="btn-quick-sel" data-count="all">Todos</button>
+                                                <button type="button" class="btn-quick-sel" data-count="16">Top 16</button>
+                                                <button type="button" class="btn-quick-sel" data-count="12">Top 12</button>
+                                                <button type="button" class="btn-quick-sel" data-count="10">Top 10</button>
+                                                <button type="button" class="btn-quick-sel" data-count="8">Top 8</button>
+                                                <button type="button" class="btn-quick-sel" data-count="4">Top 4</button>
+                                                <button type="button" id="btn-deseleccionar-equipos" style="padding: 6px 12px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 6px; color: #f87171; font-size: 0.8rem; cursor: pointer; font-weight: 600;">Desmarcar</button>
+                                            </div>
+                                        </div>
+
+                                        <!-- Grilla visual interactiva de equipos -->
+                                        <div id="sorteo-equipos-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; max-height: 360px; overflow-y: auto; padding-right: 5px;">
+                                            <!-- Tarjetas renderizadas dinámicamente -->
+                                        </div>
+
+                                        <!-- Cálculo dinámico de partidos en vivo -->
+                                        <div id="sorteo-equipos-info" style="margin-top: 14px; padding: 10px 14px; background: rgba(0,0,0,0.25); border-radius: 8px; font-size: 0.85rem; color: #94a3b8; display: flex; align-items: center; justify-content: space-between;">
+                                            <span id="sorteo-info-text"><i class="fa-solid fa-info-circle" style="color: #3b82f6;"></i> Selecciona al menos 2 equipos para ver el cálculo del calendario.</span>
+                                        </div>
+                                    </div>
                                     
-                                    <div style="display: flex; gap: 15px; margin-top: 30px;">
-                                        <button type="submit" class="btn-primary" style="flex: 1; padding: 14px; font-size: 1.1rem; font-weight: 600; border-radius: 10px; background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%); border: none; box-shadow: 0 6px 20px rgba(109, 40, 217, 0.3); transition: all 0.3s ease;"><i class="fa-solid fa-bolt" style="margin-right: 8px;"></i> Generar Mágicamente</button>
-                                        <button type="button" onclick="window.startManualCalendar()" class="btn-secondary" style="flex: 1; padding: 14px; font-size: 1.1rem; font-weight: 600; border-radius: 10px; transition: all 0.3s ease;"><i class="fa-solid fa-hand-pointer" style="margin-right: 8px;"></i> Empezar Manualmente</button>
+                                    <div style="display: flex; gap: 15px; margin-top: 25px;">
+                                        <button type="submit" class="btn-primary" style="flex: 1; padding: 14px; font-size: 1.1rem; font-weight: 600; border-radius: 10px; background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%); border: none; box-shadow: 0 6px 20px rgba(109, 40, 217, 0.3); transition: all 0.3s ease; cursor: pointer;"><i class="fa-solid fa-bolt" style="margin-right: 8px;"></i> Generar Mágicamente</button>
+                                        <button type="button" onclick="window.startManualCalendar()" class="btn-secondary" style="flex: 1; padding: 14px; font-size: 1.1rem; font-weight: 600; border-radius: 10px; transition: all 0.3s ease; cursor: pointer;"><i class="fa-solid fa-hand-pointer" style="margin-right: 8px;"></i> Empezar Manualmente</button>
                                     </div>
                                 </form>
                             </div>
 
-                            <!-- Panel Existente (Banner Horizontal) -->
-                            <div id="panel-agregar-fase" style="display: none;">
-                                <div style="background: var(--bg-secondary); border: 1px solid rgba(16, 185, 129, 0.3); border-left: 4px solid #10b981; border-radius: 8px; padding: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-                                    <div style="display: flex; align-items: center; gap: 15px;">
-                                        <div style="background: rgba(16, 185, 129, 0.1); color: #10b981; width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">
-                                            <i class="fa-solid fa-calendar-check"></i>
-                                        </div>
-                                        <div>
-                                            <h4 style="margin: 0 0 5px 0; color: var(--text-primary); font-size: 1.2rem;">Calendario Activo</h4>
-                                            <p style="margin: 0; color: var(--text-muted); font-size: 0.95rem; max-width: 400px;">Los partidos ya fueron generados. Puedes agregar una vuelta o crear llaves eliminatorias.</p>
-                                        </div>
-                                    </div>
-                                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                                        <button type="button" id="btn-agregar-vuelta" class="btn-secondary" style="padding: 10px 20px; border-radius: 6px;"><i class="fa-solid fa-rotate"></i> Agregar Vuelta</button>
-                                        <button type="button" id="btn-crear-llaves-fase" class="btn-primary" style="padding: 10px 20px; border-radius: 6px; background: #10b981; color: white;"><i class="fa-solid fa-sitemap"></i> Generar Llaves</button>
-                                    </div>
-                                </div>
-                            </div>
+                            <!-- Panel Existente vacío/oculto para compatibilidad si algo lo referencia -->
+                            <div id="panel-agregar-fase" style="display: none;"></div>
                         </section>
                     </div>
 
                     <section class="table-section" style="margin-top: 24px;" id="sorteo-resultados-section">
-                        <div class="table-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; padding: 20px; border-bottom: 1px solid rgba(255,255,255,0.05);">
-                            <h3 style="margin: 0; font-size: 1.2rem; color: #f8fafc;"><i class="fa-solid fa-calendar-days" style="color: #3b82f6; margin-right: 8px;"></i> Partidos Generados</h3>
-                            <div id="sorteo-fase-tabs" style="display: none; gap: 5px; background: rgba(15, 23, 42, 0.6); padding: 6px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.05);">
-                                <button id="tab-fase-liga" style="padding: 6px 18px; border-radius: 8px; border: none; font-size: 13px; font-weight: 600; background: #3b82f6; color: white; cursor: pointer; transition: all 0.2s ease;">Partidos</button>
-                                <button id="tab-fase-llaves" style="padding: 6px 18px; border-radius: 8px; border: none; font-size: 13px; font-weight: 600; background: transparent; color: #94a3b8; cursor: pointer; transition: all 0.2s ease;">Llaves</button>
+                        <div class="table-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.06); background: rgba(15, 23, 42, 0.4);">
+                            <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+                                <h3 style="margin: 0; font-size: 1.25rem; font-weight: 700; color: #f8fafc; display: flex; align-items: center; gap: 10px;">
+                                    <i class="fa-solid fa-calendar-days" style="color: #38bdf8; font-size: 1.2rem;"></i> Partidos Generados
+                                </h3>
+                                <div id="sorteo-fase-tabs" style="display: none; gap: 4px; background: rgba(0, 0, 0, 0.35); padding: 4px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
+                                    <button id="tab-fase-liga" style="padding: 6px 16px; border-radius: 6px; border: none; font-size: 13px; font-weight: 600; background: #3b82f6; color: white; cursor: pointer; transition: all 0.2s ease;">Partidos</button>
+                                    <button id="tab-fase-llaves" style="padding: 6px 16px; border-radius: 6px; border: none; font-size: 13px; font-weight: 600; background: transparent; color: #94a3b8; cursor: pointer; transition: all 0.2s ease;">Llaves</button>
+                                </div>
                             </div>
                         </div>
                         <div class="table-container" style="padding: 20px; background: rgba(0,0,0,0.1);">
@@ -547,7 +610,7 @@
                             </div>
                             <div style="display: flex; align-items: center; gap: 10px;">
                                 <button id="btn-add-tarjeta" style="display: none; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; border: none; font-weight: 600; padding: 8px 16px; font-size: 0.85rem; border-radius: 8px; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);"><i class="fa-solid fa-plus" style="margin-right: 5px;"></i> Añadir</button>
-                                <button id="btn-export-top10" style="display: none; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; font-weight: 600; padding: 8px 16px; font-size: 0.85rem; border-radius: 8px; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);"><i class="fa-solid fa-camera" style="margin-right: 5px;"></i> Top 10 Imagen</button>
+                                <button id="btn-reporte-tarjetas" style="display: none; background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: #000; border: none; font-weight: 700; padding: 8px 16px; font-size: 0.85rem; border-radius: 8px; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.25);"><i class="fa-solid fa-camera" style="margin-right: 5px;"></i> Reportes</button>
                             </div>
                         </div>
                         <div class="table-container">
@@ -801,6 +864,37 @@
         </div>
     </div>
 
+    <!-- Modal: Crear Nuevo Calendario -->
+    <div class="modal-overlay" id="modal-nuevo-calendario">
+        <div class="modal-content" style="max-width: 480px;">
+            <div class="modal-header">
+                <h2><i class="fa-solid fa-calendar-plus" style="color: var(--accent-primary); margin-right: 8px;"></i> Crear Nuevo Calendario</h2>
+                <button type="button" class="close-btn" id="btn-close-nuevo-calendario"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body" style="padding: 20px;">
+                <form id="form-crear-nuevo-calendario">
+                    <div class="form-group" style="margin-bottom: 20px;">
+                        <label style="color: var(--text-primary); font-weight: 600; margin-bottom: 8px; display: block;">Nombre del Calendario</label>
+                        <input type="text" id="input-nuevo-calendario-nombre" class="form-control" placeholder="Ej: Liguilla, Copa Municipal, Torneo B..." required autofocus style="padding: 12px; font-size: 1rem; width: 100%;">
+                        
+                        <div style="margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
+                            <span style="font-size: 0.8rem; color: #94a3b8; width: 100%; margin-bottom: 2px;">Sugerencias rápidas:</span>
+                            <button type="button" class="btn-sugerencia-cal" data-sug="Liguilla" style="padding: 5px 12px; border-radius: 20px; background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.3); color: #93c5fd; font-size: 0.8rem; cursor: pointer;">Liguilla</button>
+                            <button type="button" class="btn-sugerencia-cal" data-sug="Fase Final" style="padding: 5px 12px; border-radius: 20px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); color: #6ee7b7; font-size: 0.8rem; cursor: pointer;">Fase Final</button>
+                            <button type="button" class="btn-sugerencia-cal" data-sug="Torneo Relámpago" style="padding: 5px 12px; border-radius: 20px; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.3); color: #fcd34d; font-size: 0.8rem; cursor: pointer;">Torneo Relámpago</button>
+                            <button type="button" class="btn-sugerencia-cal" data-sug="Copa de Campeones" style="padding: 5px 12px; border-radius: 20px; background: rgba(139, 92, 246, 0.15); border: 1px solid rgba(139, 92, 246, 0.3); color: #c4b5fd; font-size: 0.8rem; cursor: pointer;">Copa de Campeones</button>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 25px;">
+                        <button type="button" id="btn-cancelar-nuevo-calendario" class="btn-secondary" style="padding: 10px 18px; border-radius: 8px; cursor: pointer;">Cancelar</button>
+                        <button type="submit" class="btn-primary" style="padding: 10px 22px; border-radius: 8px; cursor: pointer;"><i class="fa-solid fa-arrow-right"></i> Crear y Configurar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal Opciones de Fecha -->
     <div class="modal-overlay" id="modal-opciones-fecha">
         <div class="modal-content options-modal">
@@ -809,7 +903,7 @@
                 <button class="close-btn" id="btn-close-opciones-fecha"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <div class="modal-body">
-                <div class="options-grid">
+                <div class="options-grid" style="grid-template-columns: repeat(auto-fit, minmax(105px, 1fr)); gap: 18px 12px;">
                     <div class="option-item" onclick="window.openAddJornadaModal()">
                         <div class="option-circle opt-blue">
                             <i class="fa-solid fa-calendar-plus"></i>
@@ -828,12 +922,29 @@
                         </div>
                         <span>Editar Fecha</span>
                     </div>
-
+                    <div class="option-item" id="btn-agregar-vuelta">
+                        <div class="option-circle opt-cyan">
+                            <i class="fa-solid fa-rotate"></i>
+                        </div>
+                        <span>Agregar Vuelta</span>
+                    </div>
+                    <div class="option-item" id="btn-crear-llaves-fase">
+                        <div class="option-circle opt-green">
+                            <i class="fa-solid fa-sitemap"></i>
+                        </div>
+                        <span>Generar Llaves</span>
+                    </div>
                     <div class="option-item" id="btn-abrir-exportar">
                         <div class="option-circle opt-yellow">
                             <i class="fa-solid fa-download"></i>
                         </div>
                         <span>Exportar</span>
+                    </div>
+                    <div class="option-item" id="btn-vaciar-partidos">
+                        <div class="option-circle opt-red">
+                            <i class="fa-solid fa-rotate-left"></i>
+                        </div>
+                        <span>Vaciar / Reconfigurar</span>
                     </div>
                 </div>
             </div>
@@ -882,7 +993,7 @@
                     <span id="match-live-badge" class="badge-status programado">Programado</span>
                 </div>
                 <div class="match-dashboard-actions">
-                    <button class="btn-icon" title="Compartir"><i class="fa-solid fa-arrow-up-from-bracket"></i></button>
+                    <button class="btn-icon" id="btn-match-share-header" title="Compartir Alineación"><i class="fa-solid fa-arrow-up-from-bracket"></i></button>
                     <button class="btn-icon" title="Notificaciones"><i class="fa-solid fa-bell"></i></button>
                 </div>
             </div>
@@ -967,20 +1078,54 @@
 
             <!-- Tab Content: Alineacion -->
             <div class="dash-tab-content" id="tab-alineacion">
+                <!-- Barra superior de accesos directos tácticos -->
+                <div class="alineacion-top-actions">
+                    <button class="btn-top-tactical btn-open-tactical" data-team="local">
+                        <i class="fa-solid fa-chess-board"></i> Pizarra Táctica Local
+                    </button>
+                    <button class="btn-top-whatsapp btn-share-whatsapp-tab" data-team="local">
+                        <i class="fa-brands fa-whatsapp"></i> Póster WhatsApp Local
+                    </button>
+                    <button class="btn-top-tactical btn-open-tactical" data-team="vis">
+                        <i class="fa-solid fa-chess-board"></i> Pizarra Táctica Visitante
+                    </button>
+                    <button class="btn-top-whatsapp btn-share-whatsapp-tab" data-team="vis">
+                        <i class="fa-brands fa-whatsapp"></i> Póster WhatsApp Visitante
+                    </button>
+                </div>
+
                 <div class="alineaciones-container">
                     <div class="alineacion-col local-col">
-                        <h4>Titulares Local</h4>
+                        <div class="alineacion-col-header">
+                            <h4>Titulares Local</h4>
+                            <button class="btn-col-action-pill btn-open-tactical" data-team="local" title="Abrir en Pizarra Táctica">
+                                <i class="fa-solid fa-up-right-from-square"></i> Cancha
+                            </button>
+                        </div>
+                        <div class="mini-pitch-preview-box" id="mini-pitch-local"></div>
                         <div class="players-list" id="alineacion-titulares-local"></div>
                         <h4>Suplentes</h4>
                         <div class="players-list" id="alineacion-suplentes-local"></div>
-                        <button class="btn-edit-alineacion" data-team="local"><i class="fa-solid fa-users"></i> Editar Convocatoria</button>
+                        <div class="col-action-buttons">
+                            <button class="btn-edit-alineacion" data-team="local"><i class="fa-solid fa-users"></i> Convocatoria</button>
+                            <button class="btn-col-whatsapp btn-share-whatsapp-tab" data-team="local"><i class="fa-brands fa-whatsapp"></i> Compartir</button>
+                        </div>
                     </div>
                     <div class="alineacion-col vis-col">
-                        <h4>Titulares Visitante</h4>
+                        <div class="alineacion-col-header">
+                            <h4>Titulares Visitante</h4>
+                            <button class="btn-col-action-pill btn-open-tactical" data-team="vis" title="Abrir en Pizarra Táctica">
+                                <i class="fa-solid fa-up-right-from-square"></i> Cancha
+                            </button>
+                        </div>
+                        <div class="mini-pitch-preview-box" id="mini-pitch-vis"></div>
                         <div class="players-list" id="alineacion-titulares-vis"></div>
                         <h4>Suplentes</h4>
                         <div class="players-list" id="alineacion-suplentes-vis"></div>
-                        <button class="btn-edit-alineacion" data-team="vis"><i class="fa-solid fa-users"></i> Editar Convocatoria</button>
+                        <div class="col-action-buttons">
+                            <button class="btn-edit-alineacion" data-team="vis"><i class="fa-solid fa-users"></i> Convocatoria</button>
+                            <button class="btn-col-whatsapp btn-share-whatsapp-tab" data-team="vis"><i class="fa-brands fa-whatsapp"></i> Compartir</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1041,6 +1186,219 @@
             </div>
             <div class="modal-footer" style="padding:15px; border-top:1px solid rgba(255,255,255,0.1);">
                 <button class="btn-save-info" id="btn-save-convocatoria" style="width:100%;">Guardar Convocatoria</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Pizarra Táctica (Image 2) -->
+    <div class="modal-overlay tactical-modal-overlay" id="modal-tactical-pitch" style="z-index: 2200;">
+        <div class="modal-content tactical-pitch-content">
+            <!-- Header (Image 2 style) -->
+            <div class="tactical-header">
+                <button class="tactical-btn-back" id="btn-close-tactical-pitch" title="Volver"><i class="fa-solid fa-chevron-left"></i></button>
+                <div class="tactical-title-box">
+                    <span class="tactical-subtitle">Alineación titular</span>
+                    <div class="tactical-team-selector" id="tactical-team-selector">
+                        <button class="team-toggle-pill active" id="btn-toggle-team-local">
+                            <img id="tactical-team-logo-local" src="" alt="">
+                            <span id="tactical-team-name-local">Local</span>
+                        </button>
+                        <button class="team-toggle-pill" id="btn-toggle-team-vis">
+                            <img id="tactical-team-logo-vis" src="" alt="">
+                            <span id="tactical-team-name-vis">Visitante</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="tactical-header-actions">
+                    <button class="tactical-btn-icon" id="btn-tactical-undo" title="Deshacer"><i class="fa-solid fa-arrow-rotate-left"></i></button>
+                    <button class="tactical-btn-icon" id="btn-tactical-reset" title="Restablecer"><i class="fa-solid fa-rotate-right"></i></button>
+                    <button class="tactical-btn-icon check-btn" id="btn-save-tactical-pitch" title="Guardar Alineación"><i class="fa-solid fa-check"></i></button>
+                </div>
+            </div>
+
+            <!-- Body / Cancha y Banquillo -->
+            <div class="tactical-body">
+                <!-- Cancha de Fútbol -->
+                <div class="tactical-pitch-wrapper">
+                    <div class="tactical-pitch" id="tactical-pitch">
+                        <!-- Líneas reglamentarias -->
+                        <div class="pitch-markings">
+                            <div class="pitch-half-line"></div>
+                            <div class="pitch-center-circle"></div>
+                            <div class="pitch-center-spot"></div>
+                            <div class="pitch-penalty-area top"></div>
+                            <div class="pitch-goal-area top"></div>
+                            <div class="pitch-penalty-spot top"></div>
+                            <div class="pitch-penalty-area bottom"></div>
+                            <div class="pitch-goal-area bottom"></div>
+                            <div class="pitch-penalty-spot bottom"></div>
+                            <div class="pitch-corner top-left"></div>
+                            <div class="pitch-corner top-right"></div>
+                            <div class="pitch-corner bottom-left"></div>
+                            <div class="pitch-corner bottom-right"></div>
+                        </div>
+                        <!-- Capa de fichas de jugadores colocados -->
+                        <div class="pitch-players-layer" id="pitch-players-layer"></div>
+                    </div>
+                </div>
+
+                <!-- Banquillo de Suplentes (Dock inferior) -->
+                <div class="tactical-bench-container">
+                    <div class="bench-header">
+                        <span class="bench-title"><i class="fa-solid fa-users-line"></i> Suplentes / Banquillo</span>
+                        <span class="bench-count" id="tactical-bench-count">0</span>
+                    </div>
+                    <div class="bench-players-strip" id="tactical-bench-strip">
+                        <!-- Avatares circulares -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Barra inferior con controles tácticos (Image 2 style) -->
+            <div class="tactical-bottom-bar">
+                <button class="tactical-bottom-btn" id="btn-open-formation-picker" title="Escoge la formación">
+                    <i class="fa-solid fa-table-cells-large"></i>
+                    <span id="tactical-current-formation-label">4-4-2</span>
+                </button>
+                <button class="tactical-bottom-btn" id="btn-tactical-autofill" title="Auto-asignar disponibles">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                    <span>Auto-asignar</span>
+                </button>
+                <button class="tactical-bottom-btn whatsapp-highlight" id="btn-tactical-share-whatsapp" title="Generar póster para WhatsApp">
+                    <i class="fa-brands fa-whatsapp"></i>
+                    <span>WhatsApp</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Escoger Formación (Image 1) -->
+    <div class="modal-overlay formation-modal-overlay" id="modal-formation-picker" style="z-index: 2300;">
+        <div class="modal-content formation-picker-content">
+            <div class="formation-picker-handle"></div>
+            <div class="formation-picker-header">
+                <div>
+                    <h3>Formaciones</h3>
+                    <span class="formation-picker-sub">Escoge la formación</span>
+                </div>
+                <button class="close-btn" id="btn-close-formation-picker"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <div class="formation-section">
+                <label class="formation-section-title">Número de jugadores</label>
+                <p class="formation-section-desc">Selecciona el número de jugadores</p>
+                <div class="player-count-chips" id="formation-player-count-chips">
+                    <button class="player-count-chip active" data-count="11">11</button>
+                    <button class="player-count-chip" data-count="7">7</button>
+                    <button class="player-count-chip" data-count="8">8</button>
+                    <button class="player-count-chip" data-count="9">9</button>
+                </div>
+            </div>
+
+            <div class="formation-section formation-list-section">
+                <label class="formation-section-title">Elige tu formación</label>
+                <div class="formation-options-list" id="formation-options-list">
+                    <!-- Opciones renderizadas dinámicamente -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Seleccionar Jugador para Posición en Cancha -->
+    <div class="modal-overlay" id="modal-select-pitch-player" style="z-index: 2350;">
+        <div class="modal-content options-modal" style="max-width: 440px; max-height: 85vh; display: flex; flex-direction: column;">
+            <div class="modal-header">
+                <h3 id="select-pitch-player-title" style="font-size: 1.1rem; color: #fff;">Asignar Posición</h3>
+                <button class="close-btn" id="btn-close-select-pitch-player"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 15px;">
+                <div class="pitch-player-options-list" id="pitch-player-options-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Compartir Alineación en WhatsApp (Image 3) -->
+    <div class="modal-overlay share-lineup-modal-overlay" id="modal-lineup-share" style="z-index: 2400;">
+        <div class="modal-content share-lineup-content">
+            <div class="modal-header">
+                <div>
+                    <h2>Compartir Alineación</h2>
+                    <p style="color:var(--text-muted); font-size:0.8rem; margin:0;">Póster de alta definición para Estados y chats de WhatsApp</p>
+                </div>
+                <button class="close-btn" id="btn-close-lineup-share"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <div class="share-lineup-body">
+                <!-- Selector de equipo para el póster -->
+                <div class="share-team-tabs" id="share-team-tabs">
+                    <button class="share-team-tab active" id="btn-share-team-local">Equipo Local</button>
+                    <button class="share-team-tab" id="btn-share-team-vis">Equipo Visitante</button>
+                </div>
+
+                <!-- Contenedor del Póster para previsualización y html2canvas -->
+                <div class="poster-preview-container">
+                    <div class="whatsapp-poster-card" id="whatsapp-poster-card">
+                        <!-- Fondo Césped Real -->
+                        <div class="poster-grass-bg" id="poster-grass-bg"></div>
+                        <div class="poster-vignette"></div>
+
+                        <!-- Marca Superior y Formación -->
+                        <div class="poster-top-bar">
+                            <div class="poster-brand">
+                                <span class="poster-brand-sub">MADE WITH</span>
+                                <span class="poster-brand-main" id="poster-brand-name">FEMFUTPAL</span>
+                            </div>
+                            <div class="poster-formation-tag" id="poster-formation-tag">4-4-2</div>
+                        </div>
+
+                        <!-- Cancha en Perspectiva 3D con Jugadores -->
+                        <div class="poster-pitch-wrapper">
+                            <div class="poster-pitch">
+                                <div class="pitch-lines">
+                                    <div class="pl-half"></div>
+                                    <div class="pl-circle"></div>
+                                    <div class="pl-spot"></div>
+                                    <div class="pl-box-top"></div>
+                                    <div class="pl-box-bot"></div>
+                                    <div class="pl-goal-top"></div>
+                                    <div class="pl-goal-bot"></div>
+                                </div>
+                                <div class="poster-players-layer" id="poster-players-layer"></div>
+                            </div>
+                        </div>
+
+                        <!-- Sección Inferior: Escudos VS, LINE UP y Fecha -->
+                        <div class="poster-bottom-info">
+                            <div class="poster-match-matchup">
+                                <div class="poster-crest-box">
+                                    <img id="poster-logo-local" src="" alt="Local">
+                                </div>
+                                <div class="poster-vs-badge">VS</div>
+                                <div class="poster-crest-box">
+                                    <img id="poster-logo-vis" src="" alt="Visitante">
+                                </div>
+                            </div>
+                            <h1 class="poster-title-lineup">LINE UP</h1>
+                            <div class="poster-team-name-sub" id="poster-team-name-sub">FC MUSULI</div>
+                            <div class="poster-date-text" id="poster-date-text">domingo, 11 de oct de 2026</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Botones de Acción -->
+            <div class="share-lineup-footer">
+                <button class="btn-whatsapp-share" id="btn-do-whatsapp-share">
+                    <i class="fa-brands fa-whatsapp"></i> Compartir por WhatsApp
+                </button>
+                <div class="share-secondary-btns">
+                    <button class="btn-secondary-action" id="btn-download-lineup-image" title="Descargar PNG">
+                        <i class="fa-solid fa-download"></i> Descargar Imagen
+                    </button>
+                    <button class="btn-secondary-action" id="btn-copy-lineup-image" title="Copiar al portapapeles">
+                        <i class="fa-regular fa-copy"></i> Copiar
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -1151,6 +1509,41 @@
         </div>
     </div>
 
+    <!-- Modal Nuevo Calendario -->
+    <div class="modal-overlay" id="modal-nuevo-calendario" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); backdrop-filter: blur(4px); z-index: 9999; align-items: center; justify-content: center;">
+        <div class="modal-content" style="max-width: 480px; width: 90%; background: #1e293b; border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; box-shadow: 0 20px 40px rgba(0,0,0,0.5); overflow: hidden;">
+            <div class="modal-header" style="border-bottom: 1px solid rgba(255,255,255,0.08); padding: 18px 24px; display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="margin: 0; color: #f8fafc; font-size: 1.2rem; display: flex; align-items: center; gap: 10px;">
+                    <i class="fa-solid fa-calendar-plus" style="color: #3b82f6;"></i> Crear Nuevo Calendario
+                </h3>
+                <button type="button" class="close-btn" id="btn-close-modal-calendario" style="background: transparent; border: none; color: #94a3b8; font-size: 1.2rem; cursor: pointer;"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body" style="padding: 24px;">
+                <form id="form-nuevo-calendario">
+                    <div class="form-group" style="margin-bottom: 16px;">
+                        <label style="color: #cbd5e1; font-size: 0.9rem; font-weight: 500; margin-bottom: 8px; display: block;">Nombre del Calendario</label>
+                        <input type="text" id="input-nuevo-calendario-nombre" class="form-control" placeholder="Ej: Liguilla, Fase Final, Cuartos" required style="width: 100%; padding: 12px 14px; background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; color: white; font-size: 0.95rem;">
+                    </div>
+                    
+                    <div style="margin-bottom: 20px;">
+                        <label style="color: #94a3b8; font-size: 0.8rem; margin-bottom: 8px; display: block;">Sugerencias rápidas:</label>
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                            <button type="button" class="btn-cal-sugerencia" data-name="Liguilla Final" style="padding: 6px 12px; background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 20px; color: #60a5fa; font-size: 0.8rem; cursor: pointer;">Liguilla Final</button>
+                            <button type="button" class="btn-cal-sugerencia" data-name="Cuartos y Semis" style="padding: 6px 12px; background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 20px; color: #60a5fa; font-size: 0.8rem; cursor: pointer;">Cuartos y Semis</button>
+                            <button type="button" class="btn-cal-sugerencia" data-name="Segunda Fase" style="padding: 6px 12px; background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 20px; color: #60a5fa; font-size: 0.8rem; cursor: pointer;">Segunda Fase</button>
+                            <button type="button" class="btn-cal-sugerencia" data-name="Copa Complementaria" style="padding: 6px 12px; background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 20px; color: #60a5fa; font-size: 0.8rem; cursor: pointer;">Copa Complementaria</button>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                        <button type="button" id="btn-cancelar-modal-calendario" class="btn-secondary" style="padding: 10px 18px; border-radius: 8px; cursor: pointer;">Cancelar</button>
+                        <button type="submit" class="btn-primary" style="padding: 10px 22px; border-radius: 8px; font-weight: 600; cursor: pointer; background: #3b82f6;"><i class="fa-solid fa-plus" style="margin-right: 6px;"></i> Crear Calendario</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <!-- Plantilla Oculta para Redes Sociales -->
     <div id="export-social-container">
         <div class="export-header">
@@ -1212,6 +1605,11 @@
                     <label>Tarjetas Rojas</label>
                     <input type="number" id="edit-stats-rojas" class="edit-input" min="0" placeholder="Ej: 0">
                 </div>
+                <div class="form-group" style="margin-bottom: 0.5rem;">
+                    <label style="color:#ef4444; font-weight:700;"><i class="fa-solid fa-ban"></i> Partidos de Suspensión / Sanción</label>
+                    <input type="number" id="edit-stats-sancion-partidos" class="edit-input" min="0" placeholder="Ej: 1, 2, 3 o más partidos">
+                    <small style="color:var(--text-muted); font-size:0.75rem;">Partidos asignados por tarjeta roja o resolución disciplinaria.</small>
+                </div>
                 <button class="btn-save-info" id="btn-save-stats-extra" style="width: 100%; margin-top: 1rem;">Guardar Estadísticas</button>
             </div>
         </div>
@@ -1220,8 +1618,6 @@
     <!-- Script -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <!-- Modal Resumen de Partido -->
     <div class="modal-overlay" id="modal-resumen-partido">
         <div class="modal-content" style="max-width: 600px;">
@@ -1289,8 +1685,12 @@
     </div>
 
     <!-- JS Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <script src="js/db.js?v=5"></script>
-    <script src="js/app.js?v=17"></script>
+    <script src="img/referee_cards_b64.js"></script>
+    <script src="img/soccer_turf_b64.js"></script>
+    <script src="js/app.js?v=36"></script>
+    <script src="js/alineaciones.js?v=3"></script>
 </body>
 </html>
