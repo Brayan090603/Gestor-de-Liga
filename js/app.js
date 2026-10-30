@@ -18,6 +18,29 @@ const tabTitles = {
     porteros: { title: "Porteros Menos Goleados", statName: "Goles Recibidos" }
 };
 
+// Util para normalizar texto (quitar acentos y pasar a minúsculas)
+function normalizeString(str) {
+    if (!str) return "";
+    return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+}
+
+// Util para capitalizar primera letra de cada palabra
+function toTitleCase(str) {
+    if (!str) return "";
+    return str.toLowerCase().replace(/(?:^|\s)\S/g, function(a) { return a.toUpperCase(); });
+}
+
+// Autocapitalizar nombres al escribir en los inputs de nombres de jugadores
+document.addEventListener('input', function(e) {
+    if (e.target && (e.target.id === 'new-player-name' || e.target.id === 'add-card-jugador-name')) {
+        let start = e.target.selectionStart;
+        let end = e.target.selectionEnd;
+        e.target.value = toTitleCase(e.target.value);
+        e.target.setSelectionRange(start, end);
+    }
+});
+
+
 // State Management
 let activeId = localStorage.getItem('femfutpal_active_id');
 
@@ -37,6 +60,8 @@ let appData = {
         tipoTorneo: 'dual'
     }
 };
+window.appData = appData;
+let currentTorneo = "apertura"; // "apertura" or "clausura"
 
 async function loadDataFromSupabase() {
     showLoader("Cargando torneo...");
@@ -128,12 +153,39 @@ async function loadDataFromSupabase() {
         }));
     }
 
-    // 5. Cargar Partidos (Supabase + Fallback a LocalStorage)
-    const { data: partData } = await supabase.from('partidos').select('*').eq('torneo_id', activeId);
-    if (partData && partData.length > 0) {
-        appData.partidos = partData
-            .filter(p => p.calendario_nombre !== '__DELETED__')
-            .map(p => ({
+    // 5. Cargar Partidos (Supabase con paginación y filtro de no eliminados + Fallback a LocalStorage)
+    let allPartData = [];
+    let from = 0;
+    const pageSize = 1000;
+    let fetchError = null;
+
+    while (true) {
+        const { data: pageData, error } = await supabase
+            .from('partidos')
+            .select('*')
+            .eq('torneo_id', activeId)
+            .neq('calendario_nombre', '__DELETED__')
+            .range(from, from + pageSize - 1);
+
+        if (error) {
+            console.error("Error cargando partidos de Supabase:", error);
+            fetchError = error;
+            break;
+        }
+
+        if (pageData && pageData.length > 0) {
+            allPartData = allPartData.concat(pageData);
+            if (pageData.length < pageSize) {
+                break;
+            }
+            from += pageSize;
+        } else {
+            break;
+        }
+    }
+
+    if (!fetchError && allPartData.length > 0) {
+        appData.partidos = allPartData.map(p => ({
             id: p.id.toString(),
             torneo: p.torneo,
             fase: p.fase,
@@ -146,14 +198,18 @@ async function loadDataFromSupabase() {
             calendario_nombre: p.calendario_nombre || 'Torneo Principal',
             detalles: p.detalles || {}
         }));
+        localStorage.setItem(`femfutpal_partidos_${activeId}`, JSON.stringify(appData.partidos));
     } else {
         const localPartidos = localStorage.getItem(`femfutpal_partidos_${activeId}`);
         if (localPartidos) {
-            appData.partidos = JSON.parse(localPartidos).map(p => ({
-                ...p,
-                calendario_nombre: p.calendario_nombre || 'Torneo Principal'
-            }));
-            // Intentar subirlos de una vez
+            try {
+                appData.partidos = JSON.parse(localPartidos).map(p => ({
+                    ...p,
+                    calendario_nombre: p.calendario_nombre || 'Torneo Principal'
+                }));
+            } catch(e) {
+                appData.partidos = [];
+            }
             if (appData.partidos.length > 0) {
                 setTimeout(savePartidosToSupabase, 2000);
             }
@@ -162,11 +218,24 @@ async function loadDataFromSupabase() {
         }
     }
     
-    // Initialize calendars list
-    window.currentCalendarioNombre = 'Torneo Principal';
-    let uniqueCalendarios = [...new Set(appData.partidos.map(p => p.calendario_nombre))];
+    // Restaurar torneo seleccionado (Apertura / Clausura)
+    const savedTorneo = localStorage.getItem(`femfutpal_current_torneo_${activeId}`);
+    if (savedTorneo && (savedTorneo === 'apertura' || savedTorneo === 'clausura')) {
+        if (savedTorneo === 'clausura' && appData.config.estadoApertura === 'activo') {
+            currentTorneo = 'apertura';
+        } else {
+            currentTorneo = savedTorneo;
+        }
+    } else if (appData.config.estadoApertura === 'finalizado' && appData.config.estadoClausura === 'activo') {
+        currentTorneo = 'clausura';
+    } else {
+        currentTorneo = 'apertura';
+    }
+
+    // Inicializar lista de calendarios disponibles
+    let uniqueCalendarios = [...new Set(appData.partidos.map(p => p.calendario_nombre).filter(Boolean))];
     
-    // Merge with any empty calendars saved in localStorage
+    // Unir con calendarios guardados en localStorage
     const savedCals = localStorage.getItem(`femfutpal_calendarios_${activeId}`);
     if (savedCals) {
         try {
@@ -179,10 +248,18 @@ async function loadDataFromSupabase() {
         } catch(e) {}
     }
     
-    if(uniqueCalendarios.length === 0) uniqueCalendarios.push('Torneo Principal');
+    if (uniqueCalendarios.length === 0) uniqueCalendarios.push('Torneo Principal');
     window.calendariosDisponibles = uniqueCalendarios;
 
-    console.log("Partidos cargados en memoria:", appData.partidos.length);
+    // Restaurar calendario seleccionado
+    const savedSelectedCal = localStorage.getItem(`femfutpal_selected_cal_${activeId}`);
+    if (savedSelectedCal && window.calendariosDisponibles.includes(savedSelectedCal)) {
+        window.currentCalendarioNombre = savedSelectedCal;
+    } else {
+        window.currentCalendarioNombre = window.calendariosDisponibles[0] || 'Torneo Principal';
+    }
+
+    console.log("Partidos cargados en memoria:", appData.partidos.length, "Calendario activo:", window.currentCalendarioNombre, "Torneo:", currentTorneo);
 
     hideLoader();
 }
@@ -309,33 +386,35 @@ async function savePartidosToSupabase() {
             detalles: p.detalles || {}
         }));
 
-        let { error } = await supabase.from('partidos').upsert(partData);
-        
-        // Si falla porque no existe la columna detalles, reintentamos sin ella
-        if (error && JSON.stringify(error).includes('detalles')) {
-            console.warn("La columna 'detalles' no existe en Supabase. Guardando sin detalles...");
-            const fallbackData = partData.map(p => {
-                const copy = { ...p };
-                delete copy.detalles;
-                return copy;
-            });
-            const fallbackRes = await supabase.from('partidos').upsert(fallbackData);
-            error = fallbackRes.error;
+        const chunkSize = 100;
+        let lastError = null;
+        for (let i = 0; i < partData.length; i += chunkSize) {
+            const chunk = partData.slice(i, i + chunkSize);
+            let { error } = await supabase.from('partidos').upsert(chunk);
             
-            if (!error) {
-                // Silenciamos el alert si el fallback funcionó, pero avisamos en consola
-                console.log("Partidos guardados exitosamente usando el fallback (sin detalles).");
+            // Si falla porque no existe la columna detalles, reintentamos sin ella
+            if (error && JSON.stringify(error).includes('detalles')) {
+                console.warn("La columna 'detalles' no existe en Supabase. Guardando sin detalles...");
+                const fallbackData = chunk.map(p => {
+                    const copy = { ...p };
+                    delete copy.detalles;
+                    return copy;
+                });
+                const fallbackRes = await supabase.from('partidos').upsert(fallbackData);
+                error = fallbackRes.error;
+            }
+
+            if (error) {
+                lastError = error;
+                console.error("Error guardando lote de partidos en Supabase:", error);
             }
         }
 
-        if (error) {
-            console.error("Error guardando partidos en Supabase:", error);
-            alert("Error guardando en la base de datos: " + error.message);
+        if (lastError) {
+            alert("Error guardando en la base de datos: " + lastError.message);
         }
     }
 }
-
-let currentTorneo = "apertura"; // "apertura" or "clausura"
 
 document.addEventListener("DOMContentLoaded", async () => {
     try {
@@ -500,8 +579,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                         let rawName = line.replace(/^[0-9\.\-\_\*\#]+/, '').trim();
                         if (rawName.length < 3) continue;
                         
-                        let nameLower = rawName.toLowerCase();
-                        let existingPlayer = appData.jugadores.find(j => (j.nombre || "").toLowerCase() === nameLower);
+                        let nameLower = normalizeString(rawName);
+                        let existingPlayer = appData.jugadores.find(j => normalizeString(j.nombre || j.name) === nameLower);
                         
                         let status = 'nuevo';
                         let statusText = 'Nuevo';
@@ -904,6 +983,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     updateSeasonBtn();
     updateFinishedBanner();
 
+    // Sincronizar botones de torneo con el torneo activo restaurado
+    tournamentBtns.forEach(btn => {
+        if (btn.getAttribute("data-torneo") === currentTorneo) {
+            btn.classList.add("active");
+        } else {
+            btn.classList.remove("active");
+        }
+    });
+
     // Event Listeners for Tournament Toggle
     tournamentBtns.forEach(btn => {
         btn.addEventListener("click", () => {
@@ -917,6 +1005,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             tournamentBtns.forEach(b => b.classList.remove("active"));
             btn.classList.add("active");
             currentTorneo = targetTorneo;
+            localStorage.setItem(`femfutpal_current_torneo_${activeId}`, currentTorneo);
 
             // Update banner
             updateFinishedBanner();
@@ -930,6 +1019,11 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (currentTeamId) {
                 showTeamDetail(appData.equipos.find(t => t.id === currentTeamId));
             }
+
+            // Actualizar vistas de calendario y posiciones para el nuevo torneo
+            updateCalendarioUI();
+            renderTablaPosiciones();
+            renderInicio();
         });
     });
 
@@ -1362,9 +1456,9 @@ document.addEventListener("DOMContentLoaded", async () => {
             return alert("LÍMITE ALCANZADO: El equipo ya cuenta con 22 jugadores en su plantilla. Deberás dar de baja a un jugador actual antes de poder inscribir a otro.");
         }
 
-        // Validación de Nombre Duplicado (Ignorando mayúsculas/minúsculas)
-        const nameLower = name.toLowerCase();
-        const existingPlayer = appData.jugadores.find(p => p.name && p.name.toLowerCase() === nameLower);
+        // Validación de Nombre Duplicado (Ignorando mayúsculas/minúsculas y acentos)
+        const nameLower = normalizeString(name);
+        const existingPlayer = appData.jugadores.find(p => p.name && normalizeString(p.name) === nameLower);
 
         if (existingPlayer) {
             // Si el jugador ya existe, revisamos en qué equipo está
@@ -1376,7 +1470,12 @@ document.addEventListener("DOMContentLoaded", async () => {
                 const equipoObj = appData.equipos.find(eq => eq.id === existingPlayer.equipoId);
                 const equipoNombre = equipoObj ? equipoObj.name : "otro equipo";
 
-                // Moverlo automáticamente al nuevo equipo (Fricción Cero)
+                const confirmar = confirm(`El jugador "${name}" ya existe en el equipo ${equipoNombre.toUpperCase()}. ¿Deseas traspasarlo a este nuevo equipo?`);
+                
+                if (!confirmar) {
+                    return; // El usuario canceló la acción
+                }
+
                 const equipoOrigenId = existingPlayer.equipoId;
                 existingPlayer.equipoId = teamId;
                 existingPlayer.status = 'activo';
@@ -1398,7 +1497,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 updateSelects();
                 formNewPlayer.reset();
                 if (currentTeamId === teamId) showTeamDetail(appData.equipos.find(t => t.id === teamId));
-                return alert(`El jugador "${name}" pertenecía a ${equipoNombre.toUpperCase()}, pero ha sido inscrito exitosamente en tu equipo para esta nueva temporada.`);
+                return alert(`El jugador "${name}" ha sido traspasado de ${equipoNombre.toUpperCase()} a tu equipo exitosamente.`);
             } else {
                 // El jugador existe pero está LIBRE (dado de baja)
                 // Lo re-inscribimos en el nuevo equipo
@@ -1550,11 +1649,11 @@ document.addEventListener("DOMContentLoaded", async () => {
             sel.innerHTML = window.calendariosDisponibles.map(c => `<option value="${c}" ${c === window.currentCalendarioNombre ? 'selected' : ''}>${c}</option>`).join('');
         }
         
-        // Save available calendars to localStorage to persist empty ones
+        // Save available and selected calendars to localStorage
         localStorage.setItem(`femfutpal_calendarios_${activeId}`, JSON.stringify(window.calendariosDisponibles));
+        localStorage.setItem(`femfutpal_selected_cal_${activeId}`, window.currentCalendarioNombre);
 
         const matchesInCurrent = appData.partidos.filter(p => p.torneo === currentTorneo && p.calendario_nombre === window.currentCalendarioNombre);
-        
         const isManual = window.manualCalendars.includes(window.currentCalendarioNombre);
 
         const panelGenerar = document.getElementById("panel-generar-calendario");
@@ -1562,16 +1661,282 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         if (matchesInCurrent.length > 0 || isManual) {
             if(panelGenerar) panelGenerar.style.display = 'none';
-            if(panelFase) panelFase.style.display = 'block';
+            if(panelFase) panelFase.style.display = 'none';
         } else {
             if(panelGenerar) panelGenerar.style.display = 'block';
             if(panelFase) panelFase.style.display = 'none';
+            // Renderizar dinámicamente los equipos disponibles
+            renderEquiposSelector();
         }
 
         renderPartidosGenerados();
         renderTablaPosiciones();
     }
     
+    // --- LÓGICA SELECTOR DINÁMICO DE EQUIPOS ---
+    function renderEquiposSelector() {
+        const grid = document.getElementById("sorteo-equipos-grid");
+        if (!grid) return;
+
+        // Por defecto, si aún no se ha inicializado el set, seleccionar todos los equipos registrados
+        if (!window.selectedEquiposSorteo || window.selectedEquiposSorteo.size === 0) {
+            window.selectedEquiposSorteo = new Set(appData.equipos.map(e => e.id.toString()));
+        }
+
+        const searchTerm = (document.getElementById("filter-sorteo-equipos")?.value || "").toLowerCase().trim();
+
+        if (appData.equipos.length === 0) {
+            grid.innerHTML = `
+                <div style="grid-column: 1 / -1; text-align: center; padding: 30px; color: #94a3b8;">
+                    <i class="fa-solid fa-shield-halved" style="font-size: 2.5rem; margin-bottom: 12px; opacity: 0.4;"></i>
+                    <p style="margin: 0; font-size: 0.95rem;">No hay equipos registrados aún.</p>
+                    <p style="margin: 5px 0 0 0; font-size: 0.85rem; color: #64748b;">Usa el botón "+ Nuevo Equipo" para registrar el primero.</p>
+                </div>
+            `;
+            updateSorteoEquiposCount();
+            return;
+        }
+
+        grid.innerHTML = appData.equipos.map(eq => {
+            const isChecked = window.selectedEquiposSorteo.has(eq.id.toString());
+            const isHidden = searchTerm && !eq.nombre.toLowerCase().includes(searchTerm);
+            return `
+                <div class="sorteo-team-card ${isChecked ? 'selected' : ''}" data-team-id="${eq.id}" style="${isHidden ? 'display: none;' : ''}">
+                    <input type="checkbox" class="check-sorteo-equipo" value="${eq.id}" ${isChecked ? 'checked' : ''} style="display: none;">
+                    <img src="${eq.logo || 'https://cdn-icons-png.flaticon.com/512/53/53283.png'}" class="sorteo-team-logo" alt="${eq.nombre}" onerror="this.src='https://cdn-icons-png.flaticon.com/512/53/53283.png'">
+                    <span class="sorteo-team-name" title="${eq.nombre}">${eq.nombre}</span>
+                    <div class="sorteo-team-check"><i class="fa-solid fa-check"></i></div>
+                </div>
+            `;
+        }).join('');
+
+        // Manejar clicks en las tarjetas
+        grid.querySelectorAll(".sorteo-team-card").forEach(card => {
+            card.addEventListener("click", () => {
+                const teamId = card.getAttribute("data-team-id");
+                const checkbox = card.querySelector(".check-sorteo-equipo");
+                if (card.classList.contains("selected")) {
+                    card.classList.remove("selected");
+                    if (checkbox) checkbox.checked = false;
+                    window.selectedEquiposSorteo.delete(teamId);
+                } else {
+                    card.classList.add("selected");
+                    if (checkbox) checkbox.checked = true;
+                    window.selectedEquiposSorteo.add(teamId);
+                }
+                updateSorteoEquiposCount();
+            });
+        });
+
+        updateSorteoEquiposCount();
+    }
+
+    function updateSorteoEquiposCount() {
+        const count = window.selectedEquiposSorteo ? window.selectedEquiposSorteo.size : 0;
+        const countEl = document.getElementById("num-equipos-seleccionados");
+        if (countEl) countEl.textContent = count;
+
+        const infoEl = document.getElementById("sorteo-info-text");
+        if (!infoEl) return;
+
+        const fase = document.getElementById("sorteo-fase")?.value || 'liga';
+        const formato = document.getElementById("sorteo-formato")?.value || 'ida';
+
+        if (count < 2) {
+            infoEl.innerHTML = `<i class="fa-solid fa-circle-exclamation" style="color: #ef4444;"></i> Selecciona al menos 2 equipos para poder generar el calendario.`;
+            return;
+        }
+
+        if (fase === 'liga') {
+            const isPar = count % 2 === 0;
+            const effectiveTeams = isPar ? count : count + 1;
+            const jornadasBase = effectiveTeams - 1;
+            const partidosPorJornada = effectiveTeams / 2;
+            const totalJornadas = formato === 'idayvuelta' ? jornadasBase * 2 : jornadasBase;
+            const totalPartidos = totalJornadas * (isPar ? partidosPorJornada : (count - 1) / 2);
+            const descansoNote = isPar ? 'Todos juegan cada fecha.' : '<span style="color: #f59e0b;">(1 equipo descansará por fecha)</span>';
+
+            infoEl.innerHTML = `
+                <i class="fa-solid fa-calculator" style="color: #10b981;"></i> 
+                <strong>${count} equipos</strong> listos &bull; 
+                <strong>${totalJornadas} jornadas</strong> (${totalPartidos} partidos en total) &bull; 
+                ${descansoNote}
+            `;
+        } else if (fase === 'grupos') {
+            const numGrupos = parseInt(document.getElementById("sorteo-grupos-num")?.value) || 2;
+            const porGrupo = Math.floor(count / numGrupos);
+            const extra = count % numGrupos;
+            infoEl.innerHTML = `
+                <i class="fa-solid fa-layer-group" style="color: #3b82f6;"></i> 
+                <strong>${count} equipos</strong> distribuidos en <strong>${numGrupos} grupos</strong> (~${porGrupo} equipos c/u${extra > 0 ? `, ${extra} grupo(s) con 1 extra` : ''}).
+            `;
+        } else if (fase.startsWith('eliminatorias')) {
+            const llaves = Math.floor(count / 2);
+            infoEl.innerHTML = `
+                <i class="fa-solid fa-sitemap" style="color: #8b5cf6;"></i> 
+                <strong>${count} equipos</strong> en eliminación directa &bull; <strong>${llaves} llaves iniciales</strong> (${formato === 'idayvuelta' ? 'Ida y Vuelta' : 'Partido Único'}).
+            `;
+        }
+    }
+
+    // Buscador interactivo de equipos en el selector
+    const filterSorteoInput = document.getElementById("filter-sorteo-equipos");
+    if (filterSorteoInput) {
+        filterSorteoInput.addEventListener("input", (e) => {
+            const query = e.target.value.toLowerCase().trim();
+            document.querySelectorAll("#sorteo-equipos-grid .sorteo-team-card").forEach(card => {
+                const name = card.querySelector(".sorteo-team-name")?.textContent.toLowerCase() || "";
+                card.style.display = (!query || name.includes(query)) ? "flex" : "none";
+            });
+        });
+    }
+
+    // Botones rápidos de selección (Todos, Top 16, Top 12, etc.)
+    document.querySelectorAll(".btn-quick-sel").forEach(btn => {
+        btn.addEventListener("click", () => {
+            const countStr = btn.getAttribute("data-count");
+            const allCards = Array.from(document.querySelectorAll("#sorteo-equipos-grid .sorteo-team-card"));
+            window.selectedEquiposSorteo = new Set();
+
+            if (countStr === "all") {
+                allCards.forEach(card => {
+                    card.classList.add("selected");
+                    const cb = card.querySelector(".check-sorteo-equipo");
+                    if (cb) cb.checked = true;
+                    window.selectedEquiposSorteo.add(card.getAttribute("data-team-id"));
+                });
+            } else {
+                const n = parseInt(countStr);
+                allCards.forEach((card, idx) => {
+                    const cb = card.querySelector(".check-sorteo-equipo");
+                    if (idx < n) {
+                        card.classList.add("selected");
+                        if (cb) cb.checked = true;
+                        window.selectedEquiposSorteo.add(card.getAttribute("data-team-id"));
+                    } else {
+                        card.classList.remove("selected");
+                        if (cb) cb.checked = false;
+                    }
+                });
+            }
+            updateSorteoEquiposCount();
+        });
+    });
+
+    const btnDeseleccionar = document.getElementById("btn-deseleccionar-equipos");
+    if (btnDeseleccionar) {
+        btnDeseleccionar.addEventListener("click", () => {
+            window.selectedEquiposSorteo = new Set();
+            document.querySelectorAll("#sorteo-equipos-grid .sorteo-team-card").forEach(card => {
+                card.classList.remove("selected");
+                const cb = card.querySelector(".check-sorteo-equipo");
+                if (cb) cb.checked = false;
+            });
+            updateSorteoEquiposCount();
+        });
+    }
+
+    // Reactividad al cambiar formato o fase
+    const sorteoFaseSelectEl = document.getElementById("sorteo-fase");
+    const sorteoFormatoSelectEl = document.getElementById("sorteo-formato");
+    const sorteoGruposNumEl = document.getElementById("sorteo-grupos-num");
+    if (sorteoFaseSelectEl) sorteoFaseSelectEl.addEventListener("change", updateSorteoEquiposCount);
+    if (sorteoFormatoSelectEl) sorteoFormatoSelectEl.addEventListener("change", updateSorteoEquiposCount);
+    if (sorteoGruposNumEl) sorteoGruposNumEl.addEventListener("input", updateSorteoEquiposCount);
+
+    // Registro Rápido de Nuevo Equipo Inline
+    const btnQuickAddTeam = document.getElementById("btn-quick-add-team");
+    const quickAddPanel = document.getElementById("quick-add-team-panel");
+    const btnCancelQuickTeam = document.getElementById("btn-cancel-quick-team");
+    const btnSaveQuickTeam = document.getElementById("btn-save-quick-team");
+    const quickTeamNameInput = document.getElementById("quick-team-name");
+    const quickTeamLogoInput = document.getElementById("quick-team-logo");
+
+    if (btnQuickAddTeam && quickAddPanel) {
+        btnQuickAddTeam.addEventListener("click", () => {
+            const isHidden = quickAddPanel.style.display === "none" || !quickAddPanel.style.display;
+            quickAddPanel.style.display = isHidden ? "block" : "none";
+            if (isHidden && quickTeamNameInput) {
+                quickTeamNameInput.focus();
+            }
+        });
+    }
+
+    if (btnCancelQuickTeam && quickAddPanel) {
+        btnCancelQuickTeam.addEventListener("click", () => {
+            quickAddPanel.style.display = "none";
+            if (quickTeamNameInput) quickTeamNameInput.value = "";
+            if (quickTeamLogoInput) quickTeamLogoInput.value = "";
+        });
+    }
+
+    if (btnSaveQuickTeam) {
+        btnSaveQuickTeam.addEventListener("click", async () => {
+            const name = quickTeamNameInput?.value?.trim();
+            if (!name) {
+                return alert("Por favor escribe el nombre del equipo.");
+            }
+
+            const logoFile = quickTeamLogoInput?.files?.[0];
+
+            const persistNewTeam = async (logoUrl) => {
+                showLoader("Guardando equipo...");
+                const newTeamId = Date.now().toString();
+                const newTeam = {
+                    id: newTeamId,
+                    nombre: name,
+                    logo: logoUrl || ''
+                };
+
+                appData.equipos.push(newTeam);
+                await saveData();
+
+                if (typeof renderTeams === 'function') renderTeams();
+                if (typeof updateSelects === 'function') updateSelects();
+
+                // Agregar automáticamente a los seleccionados
+                if (!window.selectedEquiposSorteo) window.selectedEquiposSorteo = new Set();
+                window.selectedEquiposSorteo.add(newTeamId);
+
+                // Limpiar formulario y re-renderizar
+                quickAddPanel.style.display = "none";
+                if (quickTeamNameInput) quickTeamNameInput.value = "";
+                if (quickTeamLogoInput) quickTeamLogoInput.value = "";
+
+                hideLoader();
+                renderEquiposSelector();
+            };
+
+            if (logoFile) {
+                const reader = new FileReader();
+                reader.onload = (e) => persistNewTeam(e.target.result);
+                reader.readAsDataURL(logoFile);
+            } else {
+                await persistNewTeam(null);
+            }
+        });
+    }
+
+    // Modal Crear Nuevo Calendario
+    const modalNuevoCal = document.getElementById("modal-nuevo-calendario");
+    const formNuevoCal = document.getElementById("form-nuevo-calendario");
+    const inputNuevoCalNombre = document.getElementById("input-nuevo-calendario-nombre");
+    const btnCloseModalCal = document.getElementById("btn-close-modal-calendario");
+    const btnCancelModalCal = document.getElementById("btn-cancelar-modal-calendario");
+
+    function openModalNuevoCalendario() {
+        if (!modalNuevoCal) return;
+        modalNuevoCal.style.display = "flex";
+        if (inputNuevoCalNombre) {
+            inputNuevoCalNombre.value = "";
+            inputNuevoCalNombre.focus();
+        }
+    }
+
+    function closeModalNuevoCalendario() {
+        if (modalNuevoCal) modalNuevoCal.style.display = "none";
+    }
+
     window.startManualCalendar = function() {
         window.manualCalendars = window.manualCalendars || [];
         if (!window.manualCalendars.includes(window.currentCalendarioNombre)) {
@@ -1585,57 +1950,97 @@ document.addEventListener("DOMContentLoaded", async () => {
         selCalendario.addEventListener("change", (e) => {
             window.currentCalendarioNombre = e.target.value;
             window.currentJornadaTab = null; // Reset tab on change
+            localStorage.setItem(`femfutpal_selected_cal_${activeId}`, window.currentCalendarioNombre);
             updateCalendarioUI();
         });
     }
 
     const btnNuevoCalendario = document.getElementById("btn-nuevo-calendario");
     if (btnNuevoCalendario) {
-        btnNuevoCalendario.addEventListener("click", () => {
-            const nombre = prompt("Ingresa el nombre para el nuevo calendario (Ej: Liguilla, 2º Fase):");
-            if (nombre && nombre.trim() !== "") {
-                const trimNombre = nombre.trim();
-                if (!window.calendariosDisponibles.includes(trimNombre)) {
-                    window.calendariosDisponibles.push(trimNombre);
-                }
-                window.currentCalendarioNombre = trimNombre;
-                window.currentJornadaTab = null;
-                updateCalendarioUI();
-            }
+        btnNuevoCalendario.addEventListener("click", (e) => {
+            e.preventDefault();
+            openModalNuevoCalendario();
         });
     }
 
+    if (btnCloseModalCal) btnCloseModalCal.addEventListener("click", closeModalNuevoCalendario);
+    if (btnCancelModalCal) btnCancelModalCal.addEventListener("click", closeModalNuevoCalendario);
+    if (modalNuevoCal) {
+        modalNuevoCal.addEventListener("click", (e) => {
+            if (e.target === modalNuevoCal) closeModalNuevoCalendario();
+        });
+    }
+
+    // Sugerencias de nombres para nuevo calendario
+    document.querySelectorAll(".btn-cal-sugerencia").forEach(btn => {
+        btn.addEventListener("click", () => {
+            const name = btn.getAttribute("data-name");
+            if (inputNuevoCalNombre && name) {
+                inputNuevoCalNombre.value = name;
+                inputNuevoCalNombre.focus();
+            }
+        });
+    });
+
+    if (formNuevoCal) {
+        formNuevoCal.addEventListener("submit", (e) => {
+            e.preventDefault();
+            const nombre = inputNuevoCalNombre?.value?.trim();
+            if (!nombre) return alert("Por favor escribe un nombre para el calendario.");
+
+            if (!window.calendariosDisponibles.includes(nombre)) {
+                window.calendariosDisponibles.push(nombre);
+            }
+            window.currentCalendarioNombre = nombre;
+            window.currentJornadaTab = null;
+            // Pre-seleccionar todos los equipos para el nuevo calendario
+            window.selectedEquiposSorteo = new Set(appData.equipos.map(eq => eq.id.toString()));
+            localStorage.setItem(`femfutpal_selected_cal_${activeId}`, window.currentCalendarioNombre);
+            closeModalNuevoCalendario();
+            updateCalendarioUI();
+        });
+    }
+
+    // Eliminar Calendario (Sin bloqueos, seguro y fluido)
     const btnEliminarCalendario = document.getElementById("btn-eliminar-calendario");
     if (btnEliminarCalendario) {
         btnEliminarCalendario.addEventListener("click", async () => {
-            if (window.calendariosDisponibles.length <= 1 && appData.partidos.filter(p=>p.calendario_nombre === window.currentCalendarioNombre).length === 0) {
-                return alert("No se puede eliminar el único calendario base si ya está vacío.");
+            const calToDelete = window.currentCalendarioNombre;
+            if (!confirm(`¿Estás seguro de eliminar el calendario "${calToDelete}" y todos sus partidos asociados?`)) {
+                return;
             }
-            if (confirm(`¿Estás seguro de eliminar todo el calendario "${window.currentCalendarioNombre}"?`)) {
-                showLoader("Eliminando calendario...");
-                const calToDelete = window.currentCalendarioNombre;
-                
-                // Filter memory
-                appData.partidos = appData.partidos.filter(p => !(p.torneo === currentTorneo && p.calendario_nombre === calToDelete));
-                
-                // Set default
-                window.calendariosDisponibles = window.calendariosDisponibles.filter(c => c !== calToDelete);
-                if(window.calendariosDisponibles.length === 0) window.calendariosDisponibles.push("Torneo Principal");
-                window.currentCalendarioNombre = window.calendariosDisponibles[0];
-                
-                // Soft delete in Supabase (because RLS blocks DELETE commands)
-                const { error: delError } = await supabase.from('partidos').update({ calendario_nombre: '__DELETED__' })
-                    .eq('torneo_id', activeId)
-                    .eq('calendario_nombre', calToDelete);
-                
-                if (delError) {
-                    console.error("Error soft-deleting calendar from Supabase:", delError);
-                }
 
-                await savePartidosToSupabase();
-                updateCalendarioUI();
-                hideLoader();
+            showLoader("Eliminando calendario...");
+
+            // Filtrar memoria
+            appData.partidos = appData.partidos.filter(p => !(p.torneo === currentTorneo && p.calendario_nombre === calToDelete));
+
+            // Soft-delete en Supabase (evita bloqueos de RLS en DELETE)
+            const { error: delError } = await supabase.from('partidos').update({ calendario_nombre: '__DELETED__' })
+                .eq('torneo_id', activeId)
+                .eq('torneo', currentTorneo)
+                .eq('calendario_nombre', calToDelete);
+
+            if (delError) {
+                console.error("Error soft-deleting calendar from Supabase:", delError);
             }
+
+            // Remover de la lista
+            window.calendariosDisponibles = window.calendariosDisponibles.filter(c => c !== calToDelete);
+            if (window.calendariosDisponibles.length === 0) {
+                window.calendariosDisponibles.push("Torneo Principal");
+            }
+            window.currentCalendarioNombre = window.calendariosDisponibles[0];
+            window.currentJornadaTab = null;
+            localStorage.setItem(`femfutpal_selected_cal_${activeId}`, window.currentCalendarioNombre);
+
+            if (window.manualCalendars) {
+                window.manualCalendars = window.manualCalendars.filter(c => c !== calToDelete);
+            }
+
+            await savePartidosToSupabase();
+            updateCalendarioUI();
+            hideLoader();
         });
     }
 
@@ -1666,8 +2071,12 @@ document.addEventListener("DOMContentLoaded", async () => {
             const fase = document.getElementById("sorteo-fase").value; // liga | grupos | eliminatorias | eliminatorias_clasificacion
             const formato = document.getElementById("sorteo-formato").value; // ida | idayvuelta
 
-            if (appData.equipos.length < 2) {
-                return alert("Necesitas al menos 2 equipos registrados para generar un sorteo.");
+            // Obtener equipos seleccionados en el panel interactivo
+            const checkedBoxes = Array.from(document.querySelectorAll('.check-sorteo-equipo:checked'));
+            const selectedIds = new Set(checkedBoxes.map(cb => cb.value.toString()));
+
+            if (selectedIds.size < 2) {
+                return alert("Debes seleccionar al menos 2 equipos para generar el calendario.");
             }
 
             const isEliminatoria = fase.startsWith('eliminatorias');
@@ -1683,6 +2092,15 @@ document.addEventListener("DOMContentLoaded", async () => {
                     const tipoNombre = isEliminatoria ? "llaves eliminatorias" : "partidos regulares (liga/grupos)";
                     if (!confirm(`Ya hay ${tipoNombre} en el calendario "${window.currentCalendarioNombre}". ¿Borrar y sobreescribir esta fase?`)) return;
                     
+                    // Marcar como eliminados en Supabase los partidos que fueron sobreescritos para que no se dupliquen
+                    const idsToMarkDeleted = partidosMismoTipo.map(p => p.id);
+                    if (idsToMarkDeleted.length > 0) {
+                        for (let i = 0; i < idsToMarkDeleted.length; i += 100) {
+                            const batchIds = idsToMarkDeleted.slice(i, i + 100);
+                            await supabase.from('partidos').update({ calendario_nombre: '__DELETED__' }).in('id', batchIds);
+                        }
+                    }
+
                     // Solo borramos los del mismo tipo, preservando los demás
                     appData.partidos = appData.partidos.filter(p => {
                         if (p.torneo === currentTorneo && p.calendario_nombre === window.currentCalendarioNombre) {
@@ -1695,7 +2113,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
 
             showLoader(`Generando calendario en ${window.currentCalendarioNombre}...`);
-            let equiposActivos = [...appData.equipos].sort(() => Math.random() - 0.5);
+            let equiposActivos = appData.equipos.filter(eq => selectedIds.has(eq.id.toString())).sort(() => Math.random() - 0.5);
             let idCounter = Date.now();
 
             if (fase === 'liga') {
@@ -1843,11 +2261,11 @@ document.addEventListener("DOMContentLoaded", async () => {
                 }
             } else if (fase === 'eliminatorias_clasificacion') {
                 const clasificadosCount = parseInt(document.getElementById("sorteo-top-num").value) || 8;
-                const tabla = getTablaDePosicionesArray();
+                const tabla = getTablaDePosicionesArray().filter(t => selectedIds.has(t.equipo.id.toString()));
                 
                 if (tabla.length < clasificadosCount) {
                     hideLoader();
-                    return alert(`No hay suficientes equipos en la tabla de posiciones anterior. Tienes ${tabla.length} y quieres clasificar ${clasificadosCount}.`);
+                    return alert(`Solo hay ${tabla.length} equipos seleccionados disponibles en la tabla de posiciones anterior. Tienes ${tabla.length} y quieres clasificar ${clasificadosCount}.`);
                 }
 
                 const clasificados = tabla.slice(0, clasificadosCount).map(t => t.equipo);
@@ -1900,6 +2318,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     const btnAgregarVuelta = document.getElementById("btn-agregar-vuelta");
     if(btnAgregarVuelta) {
         btnAgregarVuelta.addEventListener("click", async () => {
+            const modalOpcionesFecha = document.getElementById("modal-opciones-fecha");
+            if (modalOpcionesFecha) modalOpcionesFecha.classList.remove('active');
+
             if(!confirm("¿Agregar una nueva vuelta invertida basada en los partidos existentes de este calendario?")) return;
             const matchesInCurrent = appData.partidos.filter(p => p.torneo === currentTorneo && p.calendario_nombre === window.currentCalendarioNombre);
             
@@ -1933,6 +2354,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     const btnCrearLlavesFase = document.getElementById("btn-crear-llaves-fase");
     if (btnCrearLlavesFase) {
         btnCrearLlavesFase.addEventListener("click", () => {
+            const modalOpcionesFecha = document.getElementById("modal-opciones-fecha");
+            if (modalOpcionesFecha) modalOpcionesFecha.classList.remove('active');
+
             // Activa el panel superior con la opción de eliminatorias por clasificación
             const panelGenerar = document.getElementById("panel-generar-calendario");
             if (panelGenerar) {
@@ -1944,6 +2368,44 @@ document.addEventListener("DOMContentLoaded", async () => {
                 }
                 document.querySelector(".tools-panel").scrollIntoView({ behavior: 'smooth' });
             }
+        });
+    }
+
+    // Vaciar / Reconfigurar Partidos del Calendario Activo
+    const btnVaciarPartidos = document.getElementById("btn-vaciar-partidos");
+    if (btnVaciarPartidos) {
+        btnVaciarPartidos.addEventListener("click", async () => {
+            const modalOpcionesFecha = document.getElementById("modal-opciones-fecha");
+            if (modalOpcionesFecha) modalOpcionesFecha.classList.remove('active');
+
+            const calName = window.currentCalendarioNombre;
+            if (!confirm(`¿Vaciar todos los partidos del calendario "${calName}" para volver a seleccionar equipos y generar un nuevo sorteo?`)) {
+                return;
+            }
+
+            showLoader("Vaciando partidos...");
+
+            // Soft-delete en Supabase
+            const { error: delError } = await supabase.from('partidos').update({ calendario_nombre: '__DELETED__' })
+                .eq('torneo_id', activeId)
+                .eq('torneo', currentTorneo)
+                .eq('calendario_nombre', calName);
+
+            if (delError) {
+                console.error("Error soft-deleting matches from Supabase:", delError);
+            }
+
+            // Limpiar en memoria
+            appData.partidos = appData.partidos.filter(p => !(p.torneo === currentTorneo && p.calendario_nombre === calName));
+
+            // Remover de manualCalendars si aplica
+            if (window.manualCalendars) {
+                window.manualCalendars = window.manualCalendars.filter(c => c !== calName);
+            }
+
+            await savePartidosToSupabase();
+            updateCalendarioUI();
+            hideLoader();
         });
     }
 
@@ -2969,18 +3431,35 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (roles.length === 0) roles.push("Jugador");
 
             // Lógica de Suspensión
-            const amarillasTotal = p.stats[currentTorneo].amarillas;
-            const ciclo = amarillasTotal % 5;
+            const amarillasTotal = p.stats[currentTorneo]?.amarillas || 0;
+            const sancionesCumplidas = getSancionesCumplidasCount(p.id);
+            const ciclosTotales = Math.floor(amarillasTotal / 5);
+            const isSuspended = amarillasTotal >= 5 && ciclosTotales > sancionesCumplidas;
+            const amarillasActivas = Math.max(0, amarillasTotal - (sancionesCumplidas * 5));
 
             let rowClass = "";
             let alertBadge = "";
 
-            if (amarillasTotal > 0 && ciclo === 0) {
+            if (isSuspended) {
                 rowClass = "row-suspended";
-                alertBadge = `<span class="badge-suspended">Suspendido (5)</span>`;
-            } else if (ciclo === 4) {
+                alertBadge = `
+                    <span class="badge-suspended">Suspendido (5)</span>
+                    <label class="check-sancion-label" onclick="event.stopPropagation();" title="Marcar si ya cumplió el partido de suspensión">
+                        <input type="checkbox" onchange="window.toggleSancionCumplida('${p.id}', this.checked)">
+                        <span>¿Cumplió sanción?</span>
+                    </label>
+                `;
+            } else if (amarillasActivas === 4) {
                 rowClass = "row-warning";
                 alertBadge = `<span class="badge-warning">Riesgo (4)</span>`;
+            } else if (sancionesCumplidas > 0) {
+                alertBadge = `
+                    <span class="badge-cumplida"><i class="fa-solid fa-circle-check"></i> Cumplió sanción</span>
+                    <label class="check-sancion-label cumplido" onclick="event.stopPropagation();" title="Desmarcar si no ha cumplido el partido">
+                        <input type="checkbox" checked onchange="window.toggleSancionCumplida('${p.id}', this.checked)">
+                        <span>Cumplido</span>
+                    </label>
+                `;
             }
 
             const config = appData.config;
@@ -3207,6 +3686,37 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
+    window.eliminarJugadorTotalmente = async function(playerId) {
+        const player = appData.jugadores.find(p => p.id == playerId);
+        if(!player) return;
+
+        const confirmar = confirm(`¿Estás seguro de que deseas ELIMINAR PERMANENTEMENTE al jugador "${player.name || player.nombre}"? Esta acción lo borrará por completo de la base de datos.`);
+        if(!confirmar) return;
+
+        showLoader("Eliminando jugador...");
+        try {
+            // Eliminar de Supabase directamente para que no reaparezca al recargar
+            if (typeof supabase !== 'undefined') {
+                await supabase.from('jugadores').delete().eq('id', playerId);
+                await supabase.from('movimientos').delete().eq('jugador_id', playerId);
+            }
+        } catch(err) {
+            console.error("Error al borrar de Supabase:", err);
+        }
+
+        // Eliminar del estado local
+        appData.jugadores = appData.jugadores.filter(p => p.id != playerId);
+        appData.movimientos = appData.movimientos.filter(m => m.jugadorId != playerId);
+
+        // Guardar cambios y actualizar
+        await saveData();
+        updateSelects();
+        renderInactivos();
+        hideLoader();
+        
+        alert("Jugador eliminado permanentemente con éxito.");
+    };
+
     window.reincorporarJugador = function(playerId) {
         const player = appData.jugadores.find(p => p.id == playerId);
         if(!player) return;
@@ -3268,7 +3778,14 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (!inactivosBody) return;
         inactivosBody.innerHTML = '';
 
-        const inactivos = appData.jugadores.filter(p => p.status !== 'activo');
+        // Solo son inactivos los que no están en un equipo activo o tienen status inactivo
+        const inactivos = appData.jugadores.filter(p => {
+            // Si el jugador está asignado a un equipo válido que existe en la liga, está activo
+            const teamExists = p.equipoId && appData.equipos.some(eq => eq.id == p.equipoId);
+            if (teamExists && p.status === 'activo') return false;
+            if (p.status === 'activo' && p.equipoId && p.equipoId !== 'libre' && p.equipoId !== 'vacante') return false;
+            return true;
+        });
         const filtered = inactivos.filter(p => (p.name || p.nombre || '').toLowerCase().includes(searchInput));
 
         if (filtered.length === 0) {
@@ -3302,8 +3819,9 @@ document.addEventListener("DOMContentLoaded", async () => {
                         </div>
                     </td>
                     <td style="color:var(--text-secondary); font-size:14px;"><i class="fa-solid fa-clock-rotate-left" style="opacity:0.6; margin-right:5px;"></i> ${lastTeam}</td>
-                    <td style="text-align:center;">
-                        <button onclick="reincorporarJugador('${p.id}')" class="btn-primary" style="padding: 6px 12px; font-size: 13px; background: rgba(16,185,129,0.1); color: var(--accent-primary); border: 1px solid var(--accent-primary);"><i class="fa-solid fa-rotate-left"></i> Reincorporar</button>
+                    <td style="text-align:center; display: flex; gap: 8px; justify-content: center;">
+                        <button onclick="reincorporarJugador('${p.id}')" class="btn-primary" style="padding: 6px 12px; font-size: 13px; background: rgba(16,185,129,0.1); color: var(--accent-primary); border: 1px solid var(--accent-primary);" title="Reincorporar"><i class="fa-solid fa-rotate-left"></i> <span class="d-none d-md-inline">Reincorporar</span></button>
+                        <button onclick="eliminarJugadorTotalmente('${p.id}')" class="btn-primary" style="padding: 6px 12px; font-size: 13px; background: rgba(239,68,68,0.1); color: #ef4444; border: 1px solid #ef4444;" title="Eliminar"><i class="fa-solid fa-trash"></i></button>
                     </td>
                 `;
                 inactivosBody.appendChild(tr);
@@ -3312,6 +3830,295 @@ document.addEventListener("DOMContentLoaded", async () => {
     };
     
     document.getElementById("search-inactivos")?.addEventListener("input", renderInactivos);
+
+    window.getPlayerTeamsHtml = function(player) {
+        let teamsPlayedFor = [];
+        
+        // Buscar en movimientos (orden cronológico)
+        const playerMoves = appData.movimientos.filter(m => m.jugadorId == player.id);
+        
+        playerMoves.forEach(m => {
+            if (m.tipo === 'alta' || m.tipo === 'fichaje' || m.tipo === 'traspaso') {
+                if (m.equipoOrigenId && m.equipoOrigenId !== 'vacante') {
+                    const prev = appData.equipos.find(eq => eq.id == m.equipoOrigenId);
+                    if (prev && !teamsPlayedFor.find(t => t.id == prev.id)) {
+                        teamsPlayedFor.push(prev);
+                    }
+                }
+                if (m.equipoDestinoId && m.equipoDestinoId !== 'vacante') {
+                    const next = appData.equipos.find(eq => eq.id == m.equipoDestinoId);
+                    if (next && !teamsPlayedFor.find(t => t.id == next.id)) {
+                        teamsPlayedFor.push(next);
+                    }
+                }
+            }
+        });
+
+        // Añadir el equipo actual al final si no está
+        if (player.equipoId && player.equipoId !== 'vacante') {
+            const curr = appData.equipos.find(t => t.id === player.equipoId);
+            if (curr && !teamsPlayedFor.find(t => t.id == curr.id)) {
+                teamsPlayedFor.push(curr);
+            }
+        }
+        
+        // Si estaba inactivo y su último movimiento fue baja, añadir el origen
+        if (player.status !== 'activo' && teamsPlayedFor.length === 0) {
+            const lastBaja = playerMoves.slice().reverse().find(m => m.tipo === 'baja');
+            if (lastBaja && lastBaja.equipoOrigenId) {
+                const eq = appData.equipos.find(t => t.id == lastBaja.equipoOrigenId);
+                if (eq) teamsPlayedFor.push(eq);
+            }
+        }
+
+        if (teamsPlayedFor.length === 0) {
+            return `<span class="team-badge">Sin Equipo</span>`;
+        }
+
+        let html = `<div style="display:flex; align-items:center; gap:5px; flex-wrap:wrap;">`;
+        teamsPlayedFor.forEach(t => {
+            const defaultLogo = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23cbd5e1'><path d='M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z'/></svg>";
+            const logoSrc = t.logo || defaultLogo;
+            html += `<span class="team-badge" style="display:inline-flex; align-items:center; gap:6px; padding:3px 8px; font-size:0.75rem; border:1px solid rgba(255,255,255,0.05);" title="${t.nombre}">
+                <img src="${logoSrc}" crossorigin="anonymous" style="width:16px; height:16px; object-fit:contain; border-radius:50%;" onerror="this.onerror=null; this.src='${defaultLogo}';">
+                <span>${t.nombre}</span>
+            </span>`;
+        });
+        html += `</div>`;
+        return html;
+    }
+
+    // --- LÓGICA DE SANCIONES POR ACUMULACIÓN DE TARJETAS (5 AMARILLAS) ---
+    function getSancionesCumplidasCount(playerId) {
+        if (!playerId) return 0;
+        const pIdStr = playerId.toString();
+        const countMovs = (appData.movimientos || []).filter(m => 
+            m.jugadorId == pIdStr && (m.tipo === 'sancion_cumplida_' + currentTorneo || m.tipo === 'sancion_cumplida')
+        ).length;
+
+        const localKey = `femfutpal_sanciones_${activeId}_${currentTorneo}`;
+        let countLocal = 0;
+        try {
+            const localData = JSON.parse(localStorage.getItem(localKey) || '{}');
+            countLocal = localData[pIdStr] || 0;
+        } catch (e) {}
+
+        return Math.max(countMovs, countLocal);
+    }
+    window.getSancionesCumplidasCount = getSancionesCumplidasCount;
+
+    // --- LÓGICA DE PARTIDOS DE SANCIÓN POR TARJETA ROJA / EXPULSIÓN ---
+    function getPartidosSancionRoja(playerId) {
+        if (!playerId) return 0;
+        const player = (appData.jugadores || []).find(j => j.id == playerId);
+        const stats = (player && player.stats && player.stats[currentTorneo]) ? player.stats[currentTorneo] : {};
+        if (typeof stats.sancionPartidos === 'number') {
+            return Math.max(0, stats.sancionPartidos);
+        }
+        // Si no se asignó manualmente pero tiene tarjeta roja, por defecto la roja amerita al menos 1 partido de suspensión
+        const rojas = stats.rojas || 0;
+        return rojas > 0 ? rojas : 0;
+    }
+    window.getPartidosSancionRoja = getPartidosSancionRoja;
+
+    function getPartidosCumplidosRoja(playerId) {
+        if (!playerId) return 0;
+        const pIdStr = playerId.toString();
+        const countMovs = (appData.movimientos || []).filter(m => 
+            m.jugadorId == pIdStr && (m.tipo === 'sancion_roja_cumplida_' + currentTorneo || m.tipo === 'sancion_roja_cumplida')
+        ).length;
+
+        const localKey = `femfutpal_rojas_cumplidas_${activeId}_${currentTorneo}`;
+        let countLocal = 0;
+        try {
+            const localData = JSON.parse(localStorage.getItem(localKey) || '{}');
+            countLocal = localData[pIdStr] || 0;
+        } catch (e) {}
+
+        return Math.max(countMovs, countLocal);
+    }
+    window.getPartidosCumplidosRoja = getPartidosCumplidosRoja;
+
+    window.cumplirPartidoSancionRoja = async function(playerId, delta) {
+        if (!playerId) return;
+        const player = (appData.jugadores || []).find(j => j.id == playerId);
+        const pIdStr = playerId.toString();
+        const localKey = `femfutpal_rojas_cumplidas_${activeId}_${currentTorneo}`;
+        let localData = {};
+        try {
+            localData = JSON.parse(localStorage.getItem(localKey) || '{}');
+        } catch (e) {}
+
+        const actualCumplidos = getPartidosCumplidosRoja(playerId);
+        const nuevoCumplidos = Math.max(0, actualCumplidos + delta);
+
+        showLoader(delta > 0 ? "Registrando partido cumplido..." : "Deshaciendo partido cumplido...");
+
+        try {
+            if (delta > 0) {
+                const newId = Date.now();
+                const newMov = {
+                    id: newId,
+                    torneo_id: activeId,
+                    fecha: new Date().toISOString().split('T')[0],
+                    tipo: 'sancion_roja_cumplida_' + currentTorneo,
+                    jugador_id: playerId
+                };
+                const { error: insError } = await supabase.from('movimientos').insert([newMov]);
+                if (insError) console.error("Error insertando sanción roja cumplida:", insError);
+
+                appData.movimientos.push({
+                    id: newId.toString(),
+                    fecha: newMov.fecha,
+                    tipo: newMov.tipo,
+                    jugadorId: pIdStr,
+                    equipoOrigenId: null,
+                    equipoDestinoId: null
+                });
+            } else {
+                const revIndex = appData.movimientos.slice().reverse().findIndex(m => 
+                    m.jugadorId == pIdStr && (m.tipo === 'sancion_roja_cumplida_' + currentTorneo || m.tipo === 'sancion_roja_cumplida')
+                );
+                if (revIndex !== -1) {
+                    const realIndex = appData.movimientos.length - 1 - revIndex;
+                    const movToDelete = appData.movimientos[realIndex];
+                    appData.movimientos.splice(realIndex, 1);
+                    if (movToDelete && movToDelete.id) {
+                        const { error: delError } = await supabase.from('movimientos').delete().eq('id', movToDelete.id);
+                        if (delError) console.error("Error eliminando sanción roja cumplida:", delError);
+                    }
+                }
+            }
+
+            localData[pIdStr] = nuevoCumplidos;
+            localStorage.setItem(localKey, JSON.stringify(localData));
+
+            renderStats('rojas');
+            if (typeof currentView !== 'undefined' && currentView === 'equipo-detalle') {
+                renderTeamDetails();
+            }
+        } catch (err) {
+            console.error("Error al actualizar partidos de sanción roja:", err);
+            alert("No se pudo actualizar la sanción: " + err.message);
+        } finally {
+            hideLoader();
+        }
+    };
+
+    window.editarPartidosSancionRoja = async function(playerId) {
+        if (!playerId) return;
+        const player = (appData.jugadores || []).find(j => j.id == playerId);
+        if (!player) return;
+
+        const actuales = getPartidosSancionRoja(playerId);
+        const inputPrompt = prompt(`Ingresa la cantidad total de partidos de suspensión para ${player.name || player.nombre}:`, actuales);
+        if (inputPrompt === null) return;
+
+        const parsed = parseInt(inputPrompt);
+        if (isNaN(parsed) || parsed < 0) {
+            alert("Por favor ingresa un número válido de partidos (0 o más).");
+            return;
+        }
+
+        if (!player.stats) player.stats = {};
+        if (!player.stats[currentTorneo]) player.stats[currentTorneo] = {};
+        player.stats[currentTorneo].sancionPartidos = parsed;
+
+        showLoader("Guardando partidos de sanción...");
+        await saveData();
+        hideLoader();
+
+        renderStats('rojas');
+        if (typeof currentView !== 'undefined' && currentView === 'equipo-detalle') {
+            renderTeamDetails();
+        }
+    };
+
+    window.toggleSancionCumplida = async function(playerId, isChecked) {
+        if (!playerId) return;
+        const player = (appData.jugadores || []).find(j => j.id == playerId);
+        const pName = player ? (player.name || player.nombre) : 'Jugador';
+
+        showLoader(isChecked ? "Marcando sanción cumplida..." : "Actualizando sanción...");
+
+        try {
+            const localKey = `femfutpal_sanciones_${activeId}_${currentTorneo}`;
+            let localData = {};
+            try {
+                localData = JSON.parse(localStorage.getItem(localKey) || '{}');
+            } catch (e) {}
+
+            if (isChecked) {
+                // Registrar cumplimiento
+                const newId = Date.now();
+                const newMov = {
+                    id: newId,
+                    torneo_id: activeId,
+                    fecha: new Date().toISOString().split('T')[0],
+                    tipo: 'sancion_cumplida_' + currentTorneo,
+                    jugador_id: playerId
+                };
+
+                // Guardar en Supabase
+                const { error: insError } = await supabase.from('movimientos').insert([newMov]);
+                if (insError) {
+                    console.error("Error insertando sanción cumplida en Supabase:", insError);
+                }
+
+                // Guardar en memoria
+                appData.movimientos.push({
+                    id: newId.toString(),
+                    fecha: newMov.fecha,
+                    tipo: newMov.tipo,
+                    jugadorId: playerId.toString(),
+                    equipoOrigenId: null,
+                    equipoDestinoId: null
+                });
+
+                // Guardar en localStorage
+                localData[playerId.toString()] = (localData[playerId.toString()] || 0) + 1;
+                localStorage.setItem(localKey, JSON.stringify(localData));
+
+            } else {
+                // Revertir cumplimiento
+                const pIdStr = playerId.toString();
+                const revIndex = appData.movimientos.slice().reverse().findIndex(m => 
+                    m.jugadorId == pIdStr && (m.tipo === 'sancion_cumplida_' + currentTorneo || m.tipo === 'sancion_cumplida')
+                );
+
+                if (revIndex !== -1) {
+                    const realIndex = appData.movimientos.length - 1 - revIndex;
+                    const movToDelete = appData.movimientos[realIndex];
+                    appData.movimientos.splice(realIndex, 1);
+
+                    if (movToDelete && movToDelete.id) {
+                        const { error: delError } = await supabase.from('movimientos').delete().eq('id', movToDelete.id);
+                        if (delError) {
+                            console.error("Error eliminando sanción cumplida en Supabase:", delError);
+                        }
+                    }
+                }
+
+                if (localData[pIdStr] && localData[pIdStr] > 0) {
+                    localData[pIdStr]--;
+                    if (localData[pIdStr] === 0) delete localData[pIdStr];
+                    localStorage.setItem(localKey, JSON.stringify(localData));
+                }
+            }
+
+            // Refrescar vistas
+            renderStats('amarillas');
+            if (typeof currentView !== 'undefined' && currentView === 'equipo-detalle') {
+                renderTeamDetails();
+            }
+
+            hideLoader();
+        } catch (err) {
+            console.error("Error en toggleSancionCumplida:", err);
+            hideLoader();
+            alert("No se pudo actualizar la sanción: " + err.message);
+        }
+    };
 
     function renderStats(tab) {
         const config = tabTitles[tab];
@@ -3358,6 +4165,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 const teamObj = appData.equipos.find(t => t.id === realPlayer.equipoId);
                 const stats = realPlayer.stats[currentTorneo] || {};
                 return {
+                    rawPlayer: realPlayer,
                     player: realPlayer.name,
                     team: teamObj ? teamObj.nombre : 'Sin Equipo',
                     goles: stats.goles || 0,
@@ -3409,7 +4217,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                             <span class="player-name" style="font-size: 0.95rem; display: flex; align-items: center;">${d.player} ${badgeInactivo}</span>
                         </div>
                     </td>
-                    <td><span class="team-badge" style="background: rgba(255,255,255,0.05);">${d.team}</span></td>
+                    <td>${getPlayerTeamsHtml(d.rawPlayer)}</td>
                     <td><span class="stat-highlight" style="color: var(--text-primary); font-size: 1rem;">${d.goles > 0 ? d.goles : '-'}</span></td>
                     <td><span class="stat-highlight" style="color: var(--accent-primary); font-size: 1rem;">${d.minutos}</span></td>
                     <td><span class="stat-highlight" style="color: #FCD34D; font-size: 1rem;">${d.amarillas > 0 ? d.amarillas : '-'}</span></td>
@@ -3448,6 +4256,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 const teamObj = appData.equipos.find(t => t.id === realPlayer.equipoId);
                 const stats = realPlayer.stats[currentTorneo] || {};
                 return {
+                    rawPlayer: realPlayer,
                     player: realPlayer.name,
                     team: teamObj ? teamObj.nombre : 'Sin Equipo',
                     goles: stats.golesRecibidos || 0,
@@ -3498,7 +4307,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                             <span class="player-name" style="font-size: 0.95rem; display: flex; align-items: center;">${d.player} ${badgeInactivo}</span>
                         </div>
                     </td>
-                    <td><span class="team-badge" style="background: rgba(255,255,255,0.05);">${d.team}</span></td>
+                    <td>${getPlayerTeamsHtml(d.rawPlayer)}</td>
                     <td><span class="stat-highlight" style="color: #f87171; font-size: 1rem;">${d.goles > 0 ? d.goles : '-'}</span></td>
                     <td><span class="stat-highlight" style="color: var(--accent-primary); font-size: 1rem;">${d.minutos}</span></td>
                     <td><span class="stat-highlight" style="color: ${colorRendimiento}; font-size: 1rem; font-weight:bold;">${d.rendimiento}</span></td>
@@ -3506,6 +4315,15 @@ document.addEventListener("DOMContentLoaded", async () => {
                 tableBody.appendChild(tr);
             });
             return;
+        } else if (tab === 'rojas') {
+            theadTr.innerHTML = `
+                <th>Pos</th>
+                <th>Jugador</th>
+                <th>Equipo</th>
+                <th id="stat-column-header">Rojas</th>
+                <th>Sanción (Partidos)</th>
+                <th>Estado Disciplinario</th>
+            `;
         } else {
             theadTr.innerHTML = `
                 <th>Pos</th>
@@ -3513,7 +4331,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                 <th>Equipo</th>
                 <th id="stat-column-header">${config.statName}</th>
             `;
-            // Removed assignment to constant variable
         }
 
         let activePlayers = appData.jugadores;
@@ -3542,13 +4359,28 @@ document.addEventListener("DOMContentLoaded", async () => {
             return { player: p, team: lastTeamName, stat: val, isInactivo: p.status !== 'activo' };
         });
 
-        if (tab !== 'porteros') {
+        if (tab === 'rojas') {
+            // Incluir si tiene tarjeta roja O si tiene partidos de sanción asignados
+            statData = statData.filter(d => {
+                const sancPartidos = getPartidosSancionRoja(d.player.id);
+                return d.stat > 0 || sancPartidos > 0;
+            });
+        } else if (tab !== 'porteros') {
             statData = statData.filter(d => d.stat > 0);
         }
 
         if (statData.length > 0) {
             if (tab === 'porteros') statData.sort((a, b) => a.stat - b.stat);
-            else statData.sort((a, b) => b.stat - a.stat);
+            else if (tab === 'rojas') {
+                statData.sort((a, b) => {
+                    const pSancA = getPartidosSancionRoja(a.player.id) - getPartidosCumplidosRoja(a.player.id);
+                    const pSancB = getPartidosSancionRoja(b.player.id) - getPartidosCumplidosRoja(b.player.id);
+                    if (pSancB !== pSancA) return pSancB - pSancA; // Primero los que tengan más partidos pendientes
+                    return b.stat - a.stat;
+                });
+            } else {
+                statData.sort((a, b) => b.stat - a.stat);
+            }
 
             topPlayerName.textContent = statData[0].player.name;
             topPlayerStat.textContent = `${statData[0].stat} ${config.statName}`;
@@ -3561,15 +4393,83 @@ document.addEventListener("DOMContentLoaded", async () => {
                 let alertBadge = "";
                 let badgeInactivo = d.isInactivo ? `<span style="background: rgba(239, 68, 68, 0.2); color: #f87171; padding: 2px 6px; border-radius: 4px; font-size: 0.65rem; margin-left: 8px; border: 1px solid rgba(239, 68, 68, 0.5); font-weight: bold;">INACTIVO</span>` : "";
 
+                let statValHtml = `<span class="stat-highlight" style="${tab === 'amarillas' ? 'color:#fbbf24' : tab === 'rojas' ? 'color:#ef4444' : ''}">${d.stat}</span>`;
+                let extraColumnsHtml = "";
+
                 if (tab === 'amarillas') {
-                    const ciclo = d.stat % 5;
-                    if (d.stat > 0 && ciclo === 0) {
+                    const totalAmarillas = d.stat;
+                    const sancionesCumplidas = getSancionesCumplidasCount(d.player.id);
+                    const ciclosTotales = Math.floor(totalAmarillas / 5);
+                    const isSuspended = totalAmarillas >= 5 && ciclosTotales > sancionesCumplidas;
+                    const amarillasActivas = Math.max(0, totalAmarillas - (sancionesCumplidas * 5));
+
+                    if (isSuspended) {
                         rowClass = "row-suspended";
-                        alertBadge = `<span class="badge-suspended">Suspendido (5)</span>`;
-                    } else if (ciclo === 4) {
+                        alertBadge = `
+                            <span class="badge-suspended">Suspendido (5)</span>
+                            <label class="check-sancion-label" onclick="event.stopPropagation();" title="Marcar si ya cumplió el partido de suspensión">
+                                <input type="checkbox" onchange="window.toggleSancionCumplida('${d.player.id}', this.checked)">
+                                <span>¿Cumplió sanción?</span>
+                            </label>
+                        `;
+                        statValHtml = `<span class="stat-highlight" style="color:#ef4444; font-weight:bold;">${totalAmarillas}</span>`;
+                    } else if (amarillasActivas === 4) {
                         rowClass = "row-warning";
                         alertBadge = `<span class="badge-warning">Riesgo (4)</span>`;
+                        statValHtml = `<span class="stat-highlight" style="color:#f59e0b; font-weight:bold;">4</span>` + (sancionesCumplidas > 0 ? ` <span style="font-size:0.75rem; color:#94a3b8;">(${totalAmarillas} tot)</span>` : '');
+                    } else if (sancionesCumplidas > 0) {
+                        alertBadge = `
+                            <span class="badge-cumplida"><i class="fa-solid fa-circle-check"></i> Cumplió sanción</span>
+                            <label class="check-sancion-label cumplido" onclick="event.stopPropagation();" title="Desmarcar si no ha cumplido el partido">
+                                <input type="checkbox" checked onchange="window.toggleSancionCumplida('${d.player.id}', this.checked)">
+                                <span>Cumplido</span>
+                            </label>
+                        `;
+                        statValHtml = `<div style="display:inline-flex; align-items:baseline; gap:5px;"><span class="stat-highlight" style="color:#10b981; font-weight:bold;">${amarillasActivas}</span> <span style="font-size:0.75rem; color:#94a3b8;" title="Total acumulado en el torneo: ${totalAmarillas}">(${totalAmarillas} tot)</span></div>`;
                     }
+                } else if (tab === 'rojas') {
+                    const totalSancion = getPartidosSancionRoja(d.player.id);
+                    const cumplidos = getPartidosCumplidosRoja(d.player.id);
+                    const pendientes = Math.max(0, totalSancion - cumplidos);
+                    const isSuspendido = totalSancion > 0 && pendientes > 0;
+
+                    if (isSuspendido) {
+                        rowClass = "row-suspended";
+                        alertBadge = `<span class="badge-suspended" style="background:#ef4444; color:#fff;">Sancionado (${pendientes} part. pendiente${pendientes > 1 ? 's' : ''})</span>`;
+                    } else if (totalSancion > 0 && pendientes === 0) {
+                        alertBadge = `<span class="badge-cumplida" style="background:rgba(16,185,129,0.2); color:#10b981; border:1px solid #10b981;"><i class="fa-solid fa-circle-check"></i> Sanción Cumplida</span>`;
+                    }
+
+                    extraColumnsHtml = `
+                        <td onclick="event.stopPropagation();" style="white-space: nowrap;">
+                            <div style="display:inline-flex; align-items:center; gap:8px;">
+                                <span style="font-weight:bold; font-size:1.05rem; color:${pendientes > 0 ? '#ef4444' : '#10b981'};">
+                                    ${cumplidos} / ${totalSancion} cumplidos
+                                </span>
+                                <button type="button" class="btn-sm" onclick="window.editarPartidosSancionRoja('${d.player.id}')" title="Editar cantidad de partidos de sanción" style="padding:2px 8px; font-size:11px; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2); color:#cbd5e1; border-radius:5px; cursor:pointer;">
+                                    <i class="fa-solid fa-pen"></i> Ajustar
+                                </button>
+                            </div>
+                        </td>
+                        <td onclick="event.stopPropagation();">
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                ${isSuspendido ? `
+                                    <button type="button" onclick="window.cumplirPartidoSancionRoja('${d.player.id}', 1)" style="background:linear-gradient(135deg, #10b981, #059669); color:white; border:none; padding:4px 10px; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; display:inline-flex; align-items:center; gap:5px; box-shadow: 0 2px 6px rgba(16,185,129,0.3);">
+                                        <i class="fa-solid fa-check"></i> Cumplir 1 Partido
+                                    </button>
+                                ` : `
+                                    <span style="color:#10b981; font-weight:700; font-size:12px; display:inline-flex; align-items:center; gap:4px;">
+                                        <i class="fa-solid fa-check-double"></i> Habilitado para jugar
+                                    </span>
+                                `}
+                                ${cumplidos > 0 ? `
+                                    <button type="button" onclick="window.cumplirPartidoSancionRoja('${d.player.id}', -1)" title="Deshacer 1 partido cumplido" style="background:transparent; color:#94a3b8; border:1px solid rgba(255,255,255,0.15); padding:4px 8px; border-radius:6px; font-size:11px; cursor:pointer;">
+                                        <i class="fa-solid fa-rotate-left"></i>
+                                    </button>
+                                ` : ''}
+                            </div>
+                        </td>
+                    `;
                 }
 
                 const tr = document.createElement("tr");
@@ -3583,8 +4483,9 @@ document.addEventListener("DOMContentLoaded", async () => {
                             <span>${d.player.name} ${alertBadge} ${badgeInactivo}</span>
                         </div>
                     </td>
-                    <td><span class="team-badge">${d.team}</span></td>
-                    <td><span class="stat-highlight" style="${tab === 'amarillas' ? 'color:#fbbf24' : tab === 'rojas' ? 'color:#ef4444' : ''}">${d.stat}</span></td>
+                    <td>${getPlayerTeamsHtml(d.player)}</td>
+                    <td>${statValHtml}</td>
+                    ${extraColumnsHtml}
                 `;
 
                 // Edit on click
@@ -3599,20 +4500,28 @@ document.addEventListener("DOMContentLoaded", async () => {
                 tableBody.appendChild(tr);
             });
             
-            // Logica del boton Top 10 Imagen y Add Tarjeta
-            const btnExportTop10 = document.getElementById("btn-export-top10");
+            // Logica del boton Add Tarjeta y Reportes Imagen
             const btnAddTarjeta = document.getElementById("btn-add-tarjeta");
+            const btnReporteTarjetas = document.getElementById("btn-reporte-tarjetas");
             
-            if (btnExportTop10 && btnAddTarjeta) {
+            if (btnAddTarjeta) {
                 if (tab === 'amarillas' || tab === 'rojas') {
-                    btnExportTop10.style.display = "inline-block";
-                    btnExportTop10.onclick = () => exportTop10Image(tab, statData.slice(0, 10));
-                    
                     btnAddTarjeta.style.display = "inline-block";
                     btnAddTarjeta.onclick = () => openAddTarjetaModal(tab, () => renderStats(tab));
                 } else {
-                    btnExportTop10.style.display = "none";
                     btnAddTarjeta.style.display = "none";
+                }
+            }
+
+            if (btnReporteTarjetas) {
+                if (tab === 'amarillas' || tab === 'rojas') {
+                    btnReporteTarjetas.style.display = "inline-block";
+                    btnReporteTarjetas.onclick = (e) => {
+                        if (e) e.preventDefault();
+                        exportReporteTarjetasImage(tab, statData.slice(0, 15));
+                    };
+                } else {
+                    btnReporteTarjetas.style.display = "none";
                 }
             }
         } else {
@@ -3938,10 +4847,12 @@ let liveMatchInterval = null;
 function saveLiveMatchState(match) {
     savePartidosToSupabase();
 }
+window.saveLiveMatchState = saveLiveMatchState;
 
 function openMatchDashboard(matchId) {
     currentLiveMatchId = matchId;
-    const match = appData.partidos.find(p => p.id === matchId);
+    window.currentLiveMatchId = matchId;
+    const match = appData.partidos.find(p => p.id == matchId);
     if (!match) return;
 
     if (!match.detalles) {
@@ -4451,7 +5362,12 @@ function renderAlineaciones(match) {
     
     renderList(match.detalles.alineacionVis?.titulares, "alineacion-titulares-vis");
     renderList(match.detalles.alineacionVis?.suplentes, "alineacion-suplentes-vis");
+
+    if (typeof window.renderMiniPitches === 'function') {
+        window.renderMiniPitches(match);
+    }
 }
+window.renderAlineaciones = renderAlineaciones;
 
 // Actualizar renderizaciones al abrir el modal
 const originalOpenDashboard = openMatchDashboard;
@@ -4460,6 +5376,7 @@ openMatchDashboard = function(matchId) {
     const match = appData.partidos.find(p => p.id === matchId);
     if(match) renderAlineaciones(match);
 };
+window.openMatchDashboard = openMatchDashboard;
 
 // ==========================================
 // RESULTADO RÁPIDO LOGIC
@@ -4706,94 +5623,366 @@ function checkBracketAdvancement(match) {
     }
 }
 
+
+
 // ============================================
-// LOGICA DE EXPORTACION TOP 10 CREATIVA
+// LOGICA DE EXPORTACION REPORTE TOP 15 TARJETAS (FORMATO REDES SOCIALES 1080x1350)
 // ============================================
-async function exportTop10Image(tab, players) {
-    if (players.length === 0) {
-        alert("No hay jugadores suficientes para exportar.");
+async function exportReporteTarjetasImage(tab, players) {
+    if (!players || players.length === 0) {
+        alert("No hay registros de tarjetas suficientes para exportar.");
         return;
     }
 
+    // Tomar los primeros 15
+    const topList = players.slice(0, 15);
     const isAmarilla = tab === 'amarillas';
-    const bgColor = isAmarilla ? 'linear-gradient(135deg, #1e293b, #0f172a)' : 'linear-gradient(135deg, #2c1010, #0f172a)';
-    const accentColor = isAmarilla ? '#fbbf24' : '#ef4444';
-    const titleText = isAmarilla ? 'TOP 10 TARJETAS AMARILLAS' : 'TOP 10 TARJETAS ROJAS';
-    
-    // Create the container
-    const container = document.createElement("div");
-    container.style.position = "absolute";
-    container.style.left = "-9999px";
-    container.style.top = "-9999px";
-    container.style.width = "800px";
-    container.style.background = bgColor;
-    container.style.color = "#ffffff";
-    container.style.fontFamily = "'Inter', sans-serif";
-    container.style.padding = "40px";
-    container.style.borderRadius = "20px";
-    container.style.boxSizing = "border-box";
-    
-    // Header
-    let html = `
-        <div style="text-align: center; margin-bottom: 30px; border-bottom: 2px solid ${accentColor}; padding-bottom: 20px;">
-            <h1 style="margin: 0; font-size: 36px; text-transform: uppercase; font-weight: 900; letter-spacing: 2px; text-shadow: 0 0 10px ${accentColor};">${titleText}</h1>
-            <h3 style="margin: 5px 0 0 0; font-size: 18px; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px;">Torneo ${currentTorneo}</h3>
-        </div>
-        <div style="display: flex; flex-direction: column; gap: 12px;">
-    `;
+    const accentColor = isAmarilla ? '#F59E0B' : '#EF4444';
+    const accentGlow = isAmarilla ? 'rgba(245, 158, 11, 0.4)' : 'rgba(239, 68, 68, 0.4)';
+    const cardTitle = isAmarilla ? 'ACUMULACIÓN DE TARJETAS AMARILLAS' : 'REPORTE DE TARJETAS ROJAS';
+    const reportSubtitle = isAmarilla ? 'CONTROL Y REGISTRO DISCIPLINARIO (TOP 15)' : 'SANCIONES Y EXPULSIONES (TOP 15)';
+    const seasonName = (typeof currentTorneo !== 'undefined' ? currentTorneo : 'APERTURA').toUpperCase();
+    const ligaTitle = (appData.config?.ligaInfo?.nombre || 'FEMFUTPAL').toUpperCase();
+    const ligaLugar = (appData.config?.ligaInfo?.lugar || 'LIGA OFICIAL').toUpperCase();
+    const ligaDedicatoria = (appData.config?.ligaInfo?.dedicatoria || '').toUpperCase();
+    const ligaLogo = appData.config?.ligaInfo?.logo || '';
+    const refereeCardsImgSrc = (typeof window.REFEREE_CARDS_B64 !== 'undefined') ? window.REFEREE_CARDS_B64 : 'img/referee_cards.jpg';
 
-    // Rows
-    players.forEach((pData, index) => {
+    // Contenedor formato vertical 1080x1350 (4:5 estándar de alto impacto en Instagram/Facebook/WhatsApp)
+    const container = document.createElement("div");
+    container.id = "reporte-tarjetas-export-node";
+    container.style.position = "fixed";
+    container.style.left = "-9999px";
+    container.style.top = "0px";
+    container.style.zIndex = "10000";
+    container.style.width = "1080px";
+    container.style.height = "1350px";
+    container.style.boxSizing = "border-box";
+    container.style.display = "flex";
+    container.style.flexDirection = "column";
+    container.style.justifyContent = "space-between";
+    container.style.fontFamily = "'Outfit', 'Inter', -apple-system, sans-serif";
+    container.style.padding = "34px 44px";
+    container.style.background = isAmarilla 
+        ? "radial-gradient(circle at 50% 12%, #1e293b 0%, #0a101d 55%, #030712 100%)" 
+        : "radial-gradient(circle at 50% 12%, #2d1115 0%, #12070a 55%, #030712 100%)";
+    container.style.color = "#ffffff";
+    container.style.overflow = "hidden";
+
+    // Generar filas
+    let rowsHtml = '';
+    topList.forEach((pData, index) => {
         const pos = index + 1;
-        const alertBadge = isAmarilla && pData.stat >= 4 
-            ? `<span style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid #fbbf24; font-size: 11px; padding: 2px 6px; border-radius: 4px; margin-left: 10px; font-weight: bold;">RIESGO (${pData.stat})</span>` 
-            : "";
-            
-        html += `
-            <div style="display: flex; align-items: center; background: rgba(255, 255, 255, 0.05); border-left: 4px solid ${accentColor}; border-radius: 8px; padding: 12px 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
-                <div style="width: 40px; font-size: 24px; font-weight: 900; color: ${accentColor}; opacity: 0.8;">#${pos}</div>
-                <div style="flex: 1; margin-left: 15px;">
-                    <div style="font-size: 20px; font-weight: 700; letter-spacing: 0.5px;">${pData.player.name} ${alertBadge}</div>
-                    <div style="font-size: 14px; color: #cbd5e1; margin-top: 4px; text-transform: uppercase; letter-spacing: 1px;"><i class="fa-solid fa-shield-halved" style="margin-right: 5px;"></i>${pData.team}</div>
+        
+        let posBg = 'rgba(255, 255, 255, 0.06)';
+        let posColor = '#94a3b8';
+        let rowBorder = '1px solid rgba(255, 255, 255, 0.05)';
+        let rowBg = 'rgba(15, 23, 42, 0.7)';
+
+        if (pos === 1) {
+            posBg = 'linear-gradient(135deg, #F59E0B, #D97706)';
+            posColor = '#000000';
+            rowBorder = '1px solid rgba(245, 158, 11, 0.5)';
+            rowBg = 'linear-gradient(90deg, rgba(245, 158, 11, 0.16) 0%, rgba(15, 23, 42, 0.85) 100%)';
+        } else if (pos === 2) {
+            posBg = 'linear-gradient(135deg, #E2E8F0, #94A3B8)';
+            posColor = '#0f172a';
+            rowBorder = '1px solid rgba(148, 163, 184, 0.4)';
+            rowBg = 'linear-gradient(90deg, rgba(148, 163, 184, 0.12) 0%, rgba(15, 23, 42, 0.8) 100%)';
+        } else if (pos === 3) {
+            posBg = 'linear-gradient(135deg, #F97316, #C2410C)';
+            posColor = '#ffffff';
+            rowBorder = '1px solid rgba(249, 115, 22, 0.4)';
+            rowBg = 'linear-gradient(90deg, rgba(249, 115, 22, 0.12) 0%, rgba(15, 23, 42, 0.8) 100%)';
+        }
+
+        let statusBadge = '';
+        let rowCardColor = '#cbd5e1';
+        let rowCardGlow = 'none';
+        let cardBoxBg = 'rgba(0, 0, 0, 0.35)';
+
+        if (isAmarilla) {
+            const playerAmarillas = pData.stat || 0;
+            const pId = pData.player?.id;
+            const fnSanciones = typeof getSancionesCumplidasCount === 'function' 
+                ? getSancionesCumplidasCount 
+                : (window.getSancionesCumplidasCount || (() => 0));
+            const playerSancionesCumplidas = pId ? fnSanciones(pId) : 0;
+            const playerCiclos = Math.floor(playerAmarillas / 5);
+            const playerIsSuspended = playerAmarillas >= 5 && playerCiclos > playerSancionesCumplidas;
+            const playerAmarillasActivas = Math.max(0, playerAmarillas - (playerSancionesCumplidas * 5));
+
+            if (playerIsSuspended) {
+                rowCardColor = '#EF4444';
+                rowCardGlow = 'rgba(239, 68, 68, 0.4)';
+                rowBg = 'linear-gradient(90deg, rgba(239, 68, 68, 0.22) 0%, rgba(15, 23, 42, 0.88) 100%)';
+                rowBorder = '1px solid rgba(239, 68, 68, 0.55)';
+                cardBoxBg = 'rgba(239, 68, 68, 0.2)';
+                statusBadge = `<span style="background: rgba(239, 68, 68, 0.2); color: #EF4444; border: 1px solid #EF4444; font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 5px; text-transform: uppercase; letter-spacing: 0.5px; margin-left: 8px;">SUSPENDIDO (5)</span>`;
+            } else if (playerAmarillasActivas === 4) {
+                rowCardColor = '#F59E0B';
+                rowCardGlow = 'rgba(245, 158, 11, 0.4)';
+                rowBg = 'linear-gradient(90deg, rgba(245, 158, 11, 0.16) 0%, rgba(15, 23, 42, 0.85) 100%)';
+                rowBorder = '1px solid rgba(245, 158, 11, 0.5)';
+                cardBoxBg = 'rgba(245, 158, 11, 0.2)';
+                statusBadge = `<span style="background: rgba(245, 158, 11, 0.2); color: #F59E0B; border: 1px solid #F59E0B; font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 5px; text-transform: uppercase; letter-spacing: 0.5px; margin-left: 8px;">RIESGO (4)</span>`;
+            } else if (playerSancionesCumplidas > 0) {
+                rowCardColor = '#10B981';
+                statusBadge = `<span style="background: rgba(16, 185, 129, 0.2); color: #10B981; border: 1px solid #10B981; font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 5px; text-transform: uppercase; letter-spacing: 0.5px; margin-left: 8px;">HABILITADO</span>`;
+            }
+        } else {
+            const pId = pData.player?.id;
+            const fnSancRoja = typeof getPartidosSancionRoja === 'function' ? getPartidosSancionRoja : (() => 0);
+            const fnCumplRoja = typeof getPartidosCumplidosRoja === 'function' ? getPartidosCumplidosRoja : (() => 0);
+            const totalSanc = pId ? fnSancRoja(pId) : 0;
+            const cumplidos = pId ? fnCumplRoja(pId) : 0;
+            const pendientes = Math.max(0, totalSanc - cumplidos);
+            const isSuspendido = totalSanc > 0 && pendientes > 0;
+
+            if (isSuspendido) {
+                rowCardColor = '#EF4444';
+                rowCardGlow = 'rgba(239, 68, 68, 0.4)';
+                rowBg = 'linear-gradient(90deg, rgba(239, 68, 68, 0.22) 0%, rgba(15, 23, 42, 0.88) 100%)';
+                rowBorder = '1px solid rgba(239, 68, 68, 0.55)';
+                cardBoxBg = 'rgba(239, 68, 68, 0.2)';
+                statusBadge = `<span style="background: #ef4444; color: #ffffff; border: 1px solid #ef4444; font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 5px; text-transform: uppercase; letter-spacing: 0.5px; margin-left: 8px;">SUSPENDIDO (${pendientes} PART.)</span>`;
+            } else if (totalSanc > 0 && pendientes === 0) {
+                rowCardColor = '#10B981';
+                statusBadge = `<span style="background: rgba(16, 185, 129, 0.2); color: #10B981; border: 1px solid #10B981; font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 5px; text-transform: uppercase; letter-spacing: 0.5px; margin-left: 8px;">HABILITADO</span>`;
+            } else if (pData.stat >= 1) {
+                rowCardColor = '#EF4444';
+                rowCardGlow = 'rgba(239, 68, 68, 0.4)';
+                cardBoxBg = 'rgba(239, 68, 68, 0.15)';
+            }
+        }
+
+        // Equipos formateados con escudos limpios y nítidos
+        const teamsHtml = getPlayerTeamsHtml(pData.player)
+            .replace(/width:16px/g, 'width:26px')
+            .replace(/height:16px/g, 'height:26px')
+            .replace(/font-size:0.75rem/g, 'font-size:14px; font-weight:700; color:#e2e8f0;')
+            .replace(/padding:3px 8px/g, 'padding:5px 12px; background: rgba(0,0,0,0.4); border-radius: 20px; gap:8px;')
+            .replace(/border:1px solid rgba\(255,255,255,0.05\)/g, 'border:1px solid rgba(255,255,255,0.15)');
+
+        rowsHtml += `
+            <div style="display: flex; align-items: center; justify-content: space-between; background: ${rowBg}; border: ${rowBorder}; border-radius: 12px; padding: 10px 18px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); height: 52px; box-sizing: border-box;">
+                <!-- Posición y Jugador -->
+                <div style="display: flex; align-items: center; gap: 14px; flex: 1; min-width: 0;">
+                    <div style="min-width: 38px; height: 38px; border-radius: 10px; background: ${posBg}; color: ${posColor}; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 18px; box-shadow: 0 2px 6px rgba(0,0,0,0.3);">
+                        ${pos}
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 6px; overflow: hidden; min-width: 0; white-space: nowrap; text-overflow: ellipsis;">
+                        <span style="font-size: 18px; font-weight: 800; color: #ffffff; letter-spacing: 0.3px;">${pData.player.name}</span>
+                        ${statusBadge}
+                    </div>
                 </div>
-                <div style="width: 60px; height: 60px; background: rgba(0,0,0,0.5); border-radius: 12px; display: flex; justify-content: center; align-items: center; border: 2px solid ${accentColor};">
-                    <span style="font-size: 32px; font-weight: 900; color: ${accentColor}; line-height: 1; margin-top: 2px;">${pData.stat}</span>
+
+                <!-- Equipos del jugador -->
+                <div style="flex-shrink: 0; margin: 0 20px;">
+                    ${teamsHtml}
+                </div>
+
+                <!-- Contador de tarjetas estilo insignia -->
+                <div style="min-width: 54px; height: 40px; border-radius: 10px; background: ${cardBoxBg}; border: 2px solid ${rowCardColor}; box-shadow: 0 0 12px ${rowCardGlow}; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                    <span style="font-size: 22px; font-weight: 900; color: ${rowCardColor}; font-family: 'Outfit', sans-serif;">${pData.stat}</span>
                 </div>
             </div>
         `;
     });
 
-    html += `
+    const cardBgThemeColor = isAmarilla ? '#F59E0B' : '#EF4444';
+    const watermarkDecorations = `
+        <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; opacity: 0.04; z-index: 1;">
+            <svg width="1080" height="1350" viewBox="0 0 1080 1350" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="540" cy="675" r="320" stroke="#ffffff" stroke-width="12" />
+                <line x1="0" y1="675" x2="1080" y2="675" stroke="#ffffff" stroke-width="12" />
+                <rect x="240" y="0" width="600" height="280" stroke="#ffffff" stroke-width="12" />
+                <rect x="240" y="1070" width="600" height="280" stroke="#ffffff" stroke-width="12" />
+            </svg>
         </div>
-        <div style="margin-top: 30px; text-align: center; font-size: 12px; color: #64748b; font-weight: 600; letter-spacing: 1px; border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 20px;">
-            SISTEMA DE ESTADÍSTICAS &bull; CREADO AUTOMÁTICAMENTE
+        <div style="position: absolute; left: -40px; top: 40%; transform: translateY(-50%) rotate(-18deg); opacity: 0.1; pointer-events: none; z-index: 1;">
+            <div style="width: 150px; height: 230px; background: ${cardBgThemeColor}; border-radius: 18px; box-shadow: 0 0 50px ${cardBgThemeColor};"></div>
+        </div>
+        <div style="position: absolute; right: -40px; bottom: 20%; transform: rotate(18deg); opacity: 0.1; pointer-events: none; z-index: 1;">
+            <div style="width: 150px; height: 230px; background: ${cardBgThemeColor}; border-radius: 18px; box-shadow: 0 0 50px ${cardBgThemeColor};"></div>
         </div>
     `;
 
-    container.innerHTML = html;
-    document.body.appendChild(container);
+    container.innerHTML = `
+        ${watermarkDecorations}
 
-    showLoader("Generando imagen Top 10...");
+        <!-- HEADER DINÁMICO Y CREATIVO ESTILO PORTADA DEPORTIVA -->
+        <div style="position: relative; z-index: 2; margin-bottom: 24px; border-radius: 20px; overflow: hidden; background: linear-gradient(135deg, rgba(30, 41, 59, 0.9) 0%, rgba(15, 23, 42, 0.98) 100%); border: 1.5px solid rgba(245, 158, 11, 0.4); box-shadow: 0 12px 35px rgba(0,0,0,0.6);">
+            <!-- Textura de fondo con gradiente deportivo y red de arco -->
+            <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0.15; pointer-events: none; background: radial-gradient(circle at 85% 30%, ${accentColor} 0%, transparent 60%);"></div>
+
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 22px 30px; position: relative; z-index: 3;">
+                
+                <!-- Lado Izquierdo: Foto de Tarjetas Árbitro + Balón + Logo / Título -->
+                <div style="display: flex; align-items: center; gap: 22px;">
+                    <!-- Badge Deportivo con Foto Realista de Tarjetas y Balón -->
+                    <div style="position: relative; width: 110px; height: 110px; flex-shrink: 0;">
+                        <!-- Contenedor con borde neón y brillo deportivo -->
+                        <div style="width: 100%; height: 100%; border-radius: 20px; overflow: hidden; border: 2.5px solid ${accentColor}; box-shadow: 0 8px 25px ${accentGlow}; position: relative; background: #0b1329;">
+                            <img src="${refereeCardsImgSrc}" style="width: 100%; height: 100%; object-fit: cover; object-position: center; display: block;" onerror="this.style.display='none';">
+                            <!-- Overlay gradiente sutil sobre la foto para integrarla -->
+                            <div style="position: absolute; inset: 0; background: linear-gradient(135deg, rgba(245,158,11,0.2) 0%, rgba(15,23,42,0.4) 100%); mix-blend-mode: overlay;"></div>
+                        </div>
+                        <!-- Mini tarjeta amarilla flotante de acento en la esquina -->
+                        <div style="position: absolute; top: -6px; right: -6px; width: 28px; height: 42px; background: linear-gradient(135deg, #fbbf24, #f59e0b); border-radius: 6px; transform: rotate(14deg); box-shadow: 0 4px 14px rgba(0,0,0,0.6), 0 0 12px rgba(245,158,11,0.8); border: 1.5px solid #ffffff; display: flex; align-items: center; justify-content: center; z-index: 4;">
+                            <span style="font-size: 15px; line-height: 1;">⚡</span>
+                        </div>
+                    </div>
+
+                    <!-- Separador vertical sutil -->
+                    <div style="width: 2px; height: 85px; background: linear-gradient(180deg, transparent, rgba(245, 158, 11, 0.7), transparent);"></div>
+
+                    <!-- Datos y Título Oficial de la Liga -->
+                    <div style="display: flex; flex-direction: column;">
+                        <!-- Nombre Oficial de la Federación y Municipio -->
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 14px; font-weight: 800; color: ${accentColor}; letter-spacing: 1.5px; text-transform: uppercase;">
+                                ${ligaTitle}
+                            </span>
+                            ${ligaLugar ? `<span style="color: rgba(255,255,255,0.3); font-size: 13px;">&bull;</span><span style="font-size: 13px; color: #94a3b8; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;">${ligaLugar}</span>` : ''}
+                        </div>
+
+                        <!-- Título Principal de Impacto con Tarjeta Amarilla de Acento -->
+                        <div style="margin: 5px 0 4px 0; display: flex; align-items: center; gap: 12px;">
+                            <div style="width: 20px; height: 32px; background: #f59e0b; border-radius: 5px; box-shadow: 0 0 14px #f59e0b; flex-shrink: 0; transform: rotate(-5deg); border: 1.5px solid rgba(255,255,255,0.7);"></div>
+                            <h1 style="margin: 0; font-size: 32px; font-weight: 900; letter-spacing: 0.8px; color: #ffffff; text-transform: uppercase; text-shadow: 0 2px 12px rgba(0,0,0,0.7); line-height: 1.1;">
+                                ${cardTitle}
+                            </h1>
+                        </div>
+
+                        <!-- Subtítulo con Torneo y Categoría -->
+                        <div style="display: flex; align-items: center; gap: 12px; margin-top: 3px;">
+                            <span style="display: inline-block; padding: 4px 12px; background: rgba(245, 158, 11, 0.18); border: 1px solid ${accentColor}; border-radius: 6px; font-size: 12px; font-weight: 800; color: ${accentColor}; letter-spacing: 1px; text-transform: uppercase;">
+                                ${reportSubtitle}
+                            </span>
+                            <span style="font-size: 13px; font-weight: 800; color: #e2e8f0; letter-spacing: 1px; text-transform: uppercase;">
+                                TORNEO ${seasonName}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Lado Derecho: Logo Oficial de la Liga + Etiqueta de Certificación -->
+                <div style="display: flex; align-items: center; gap: 18px;">
+                    <div style="text-align: right;">
+                        <div style="display: inline-block; padding: 5px 12px; background: rgba(16, 185, 129, 0.18); border: 1px solid #10b981; border-radius: 6px; font-size: 11px; color: #34d399; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;">
+                            OFICIAL &bull; ACTUALIZADO
+                        </div>
+                        <div style="font-size: 14px; font-weight: 900; color: #ffffff; margin-top: 4px; letter-spacing: 0.5px;">
+                            TABLA DISCIPLINARIA
+                        </div>
+                    </div>
+
+                    ${ligaLogo ? `
+                        <div style="position: relative; width: 84px; height: 84px; border-radius: 50%; padding: 3px; background: linear-gradient(135deg, ${accentColor}, #0f172a); box-shadow: 0 4px 20px ${accentGlow}; flex-shrink: 0;">
+                            <img src="${ligaLogo}" crossorigin="anonymous" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover; background: #0f172a; display: block;">
+                        </div>
+                    ` : `
+                        <div style="width: 80px; height: 80px; border-radius: 50%; background: rgba(255,255,255,0.06); border: 2px solid ${accentColor}; display: flex; align-items: center; justify-content: center; font-size: 38px; box-shadow: 0 4px 18px ${accentGlow};">
+                            ⚽
+                        </div>
+                    `}
+                </div>
+
+            </div>
+        </div>
+
+        <!-- LISTA TOP 15 CENTRAL BIEN DISTRIBUIDA Y AJUSTADA -->
+        <div style="flex: 1; display: flex; flex-direction: column; justify-content: space-between; gap: 8px; margin-bottom: 20px; position: relative; z-index: 2;">
+            ${rowsHtml}
+        </div>
+
+        <!-- FOOTER ELEGANTE -->
+        <div style="display: flex; align-items: center; justify-content: space-between; border-top: 1px solid rgba(255,255,255,0.12); padding-top: 14px; position: relative; z-index: 2;">
+            <div style="font-size: 13px; color: #64748b; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; max-width: 750px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                ${ligaDedicatoria ? `&ldquo;${ligaDedicatoria}&rdquo;` : 'SISTEMA DISCIPLINARIO OFICIAL'}
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #94a3b8; font-weight: 700;">
+                <span style="display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: ${accentColor}; box-shadow: 0 0 8px ${accentColor};"></span>
+                FEMFUTPAL STATS
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(container);
+    if (typeof showLoader === 'function') {
+        showLoader("Generando reporte de tarjetas...");
+    }
 
     try {
-        const canvas = await html2canvas(container, {
-            scale: 2, // High resolution
-            backgroundColor: null,
+        if (typeof window.html2canvas === 'undefined' && typeof html2canvas === 'undefined') {
+            throw new Error("Librería de captura no disponible.");
+        }
+        const h2c = window.html2canvas || html2canvas;
+
+        // Convertir todas las imágenes a Base64 antes de invocar html2canvas para evitar Tainted Canvas
+        const imageElements = container.querySelectorAll('img');
+        await Promise.all(Array.from(imageElements).map(async (img) => {
+            const src = img.getAttribute('src');
+            if (!src || src.startsWith('data:')) return;
+            try {
+                const response = await fetch(src, { mode: 'cors' });
+                const blob = await response.blob();
+                await new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                        if (reader.result) {
+                            img.src = reader.result;
+                        }
+                        resolve();
+                    };
+                    reader.onerror = resolve;
+                    reader.readAsDataURL(blob);
+                });
+            } catch (imgFetchErr) {
+                // Si la imagen externa falla por CORS, la ocultamos para que el canvas no se manche (taint)
+                console.warn("Imagen no exportable por CORS, omitiendo:", src);
+                img.style.display = 'none';
+            }
+        }));
+
+        // Breve espera de sincronización de pintado
+        await new Promise(resolve => setTimeout(resolve, 200));
+
+        const canvas = await h2c(container, {
+            scale: 2,
+            width: 1080,
+            height: 1350,
+            useCORS: true,
+            allowTaint: false,
+            backgroundColor: "#030712",
             logging: false
         });
-        
+
+        const fileName = `Reporte_${tab}_Top15_${seasonName}.png`;
+        const dataUrl = canvas.toDataURL("image/png");
         const link = document.createElement("a");
-        link.download = `Top10_${tab}_${currentTorneo}.png`;
-        link.href = canvas.toDataURL("image/png");
+        link.download = fileName;
+        link.href = dataUrl;
+        document.body.appendChild(link);
         link.click();
+        setTimeout(() => {
+            if (link.parentNode) link.parentNode.removeChild(link);
+        }, 500);
+
     } catch (e) {
-        console.error("Error generating image:", e);
-        alert("Ocurrió un error al generar la imagen. Asegúrate de tener conexión a internet para descargar las fuentes e iconos.");
+        console.error("Error generando imagen:", e);
+        alert("Ocurrió un inconveniente al generar la imagen: " + (e.message || "Error desconocido"));
     } finally {
-        hideLoader();
-        document.body.removeChild(container);
+        if (container.parentNode) {
+            container.parentNode.removeChild(container);
+        }
+        if (typeof hideLoader === 'function') {
+            hideLoader();
+        }
     }
 }
+window.exportReporteTarjetasImage = exportReporteTarjetasImage;
 
 // ============================================
 // MODAL DE REPORTE DE TARJETAS
@@ -4876,6 +6065,72 @@ function openReporteModal(tab, playerObj, currentTotal, onSaveCallback) {
 
     const titleColor = isAmarilla ? '#10b981' : '#ef4444'; 
 
+    let sancionControlHtml = '';
+    if (isAmarilla) {
+        const totalAmarillas = currentTotal;
+        const fnSancionesModal = typeof getSancionesCumplidasCount === 'function' 
+            ? getSancionesCumplidasCount 
+            : (window.getSancionesCumplidasCount || (() => 0));
+        const sancionesCount = fnSancionesModal(playerObj.id);
+        const ciclos = Math.floor(totalAmarillas / 5);
+        const isSusp = totalAmarillas >= 5 && ciclos > sancionesCount;
+        const act = Math.max(0, totalAmarillas - (sancionesCount * 5));
+
+        sancionControlHtml = `
+            <div style="background: ${isSusp ? 'rgba(239, 68, 68, 0.08)' : (sancionesCount > 0 ? 'rgba(16, 185, 129, 0.08)' : '#f8fafc')}; border: 1px solid ${isSusp ? '#fca5a5' : (sancionesCount > 0 ? '#86efac' : '#e2e8f0')}; border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+                <div>
+                    <strong style="color: ${isSusp ? '#b91c1c' : (sancionesCount > 0 ? '#15803d' : '#334155')}; font-size: 13px; display: flex; align-items: center; gap: 6px;">
+                        <i class="fa-solid ${isSusp ? 'fa-triangle-exclamation' : (sancionesCount > 0 ? 'fa-circle-check' : 'fa-shield-halved')}"></i>
+                        ${isSusp ? 'Suspendido por 5 Tarjetas' : (sancionesCount > 0 ? 'Sanción Cumplida' : 'Control de Acumulación')}
+                    </strong>
+                    <div style="font-size: 12px; color: ${isSusp ? '#ef4444' : (sancionesCount > 0 ? '#16a34a' : '#64748b')}; margin-top: 2px;">
+                        ${isSusp ? 'Debe cumplir 1 partido de suspensión.' : (sancionesCount > 0 ? `Cumplió su suspensión. Acumulación actual: ${act}/5.` : `Tarjetas en ciclo: ${totalAmarillas % 5}/5.`)}
+                    </div>
+                </div>
+                ${(totalAmarillas >= 5 || sancionesCount > 0) ? `
+                    <label class="check-sancion-label ${sancionesCount >= ciclos ? 'cumplido' : ''}" style="margin: 0; padding: 6px 10px; cursor: pointer;">
+                        <input type="checkbox" id="modal-report-check-cumplido" ${sancionesCount >= ciclos ? 'checked' : ''}>
+                        <span>${sancionesCount >= ciclos ? 'Cumplido' : '¿Cumplió?'}</span>
+                    </label>
+                ` : ''}
+            </div>
+        `;
+    } else {
+        const totalSancion = getPartidosSancionRoja(playerObj.id);
+        const cumplidos = getPartidosCumplidosRoja(playerObj.id);
+        const pendientes = Math.max(0, totalSancion - cumplidos);
+        const isSusp = totalSancion > 0 && pendientes > 0;
+
+        sancionControlHtml = `
+            <div style="background: ${isSusp ? 'rgba(239, 68, 68, 0.08)' : 'rgba(16, 185, 129, 0.08)'}; border: 1px solid ${isSusp ? '#fca5a5' : '#86efac'}; border-radius: 8px; padding: 14px; margin-bottom: 14px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                    <strong style="color: ${isSusp ? '#b91c1c' : '#15803d'}; font-size: 14px; display: flex; align-items: center; gap: 6px;">
+                        <i class="fa-solid ${isSusp ? 'fa-ban' : 'fa-check-double'}"></i>
+                        ${isSusp ? `Sancionado (${pendientes} partido${pendientes > 1 ? 's' : ''} pendiente${pendientes > 1 ? 's' : ''})` : 'Habilitado (Sanción Cumplida)'}
+                    </strong>
+                    <button type="button" onclick="window.editarPartidosSancionRoja('${playerObj.id}')" style="background: #3b82f6; color: white; border: none; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer;">
+                        <i class="fa-solid fa-pen"></i> Ajustar Partidos
+                    </button>
+                </div>
+                <div style="font-size: 13px; color: #475569; display: flex; align-items: center; justify-content: space-between;">
+                    <span>Partidos: <strong>${cumplidos} de ${totalSancion} cumplidos</strong></span>
+                    <div style="display: flex; gap: 6px;">
+                        ${isSusp ? `
+                            <button type="button" onclick="window.cumplirPartidoSancionRoja('${playerObj.id}', 1)" style="background: #10b981; color: white; border: none; padding: 5px 10px; border-radius: 5px; font-size: 11px; font-weight: bold; cursor: pointer;">
+                                +1 Partido Cumplido
+                            </button>
+                        ` : ''}
+                        ${cumplidos > 0 ? `
+                            <button type="button" onclick="window.cumplirPartidoSancionRoja('${playerObj.id}', -1)" style="background: #e2e8f0; color: #475569; border: none; padding: 5px 8px; border-radius: 5px; font-size: 11px; cursor: pointer;" title="Deshacer 1">
+                                Deshacer
+                            </button>
+                        ` : ''}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
     modalOverlay.innerHTML = `
         <div style="background: white; width: 90%; max-width: 500px; border-radius: 8px; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); display: flex; flex-direction: column; max-height: 85vh; font-family: 'Inter', sans-serif;">
             <div style="padding: 20px; text-align: center; border-bottom: 1px solid #f1f5f9;">
@@ -4883,7 +6138,8 @@ function openReporteModal(tab, playerObj, currentTotal, onSaveCallback) {
                 <h3 style="margin:8px 0 0 0; color: #3b82f6; font-size: 16px; font-weight: normal;">${playerObj.name}</h3>
             </div>
             
-            <div style="padding: 10px 20px; overflow-y: auto; flex: 1; background: #f8fafc;">
+            <div style="padding: 15px 20px; overflow-y: auto; flex: 1; background: #f8fafc;">
+                ${sancionControlHtml}
                 ${eventsHtml}
             </div>
             
@@ -4901,6 +6157,16 @@ function openReporteModal(tab, playerObj, currentTotal, onSaveCallback) {
     `;
 
     document.body.appendChild(modalOverlay);
+
+    const modalCheckCumplido = document.getElementById("modal-report-check-cumplido");
+    if (modalCheckCumplido) {
+        modalCheckCumplido.addEventListener("change", async (e) => {
+            await window.toggleSancionCumplida(playerObj.id, e.target.checked);
+            if (document.body.contains(modalOverlay)) {
+                document.body.removeChild(modalOverlay);
+            }
+        });
+    }
 
     document.getElementById("btn-close-report").onclick = () => {
         document.body.removeChild(modalOverlay);
@@ -5010,10 +6276,18 @@ function openAddTarjetaModal(tab, onSaveCallback) {
                     </select>
                 </div>
 
-                <div style="margin-bottom: 5px;">
+                <div style="margin-bottom: 15px;">
                     <label style="display: block; margin-bottom: 5px; font-size: 14px; font-weight: 600; color: #334155;">Cantidad de Tarjetas a sumar</label>
                     <input type="number" id="add-card-cantidad" value="1" min="1" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 15px; box-sizing: border-box;" />
                 </div>
+
+                ${!isAmarilla ? `
+                    <div style="margin-bottom: 5px; background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 6px; padding: 12px;">
+                        <label style="display: block; margin-bottom: 5px; font-size: 14px; font-weight: 700; color: #ef4444;"><i class="fa-solid fa-ban"></i> Partidos de Suspensión</label>
+                        <input type="number" id="add-card-sancion-partidos" value="1" min="0" placeholder="Ej: 1, 2, 3, 4 partidos..." style="width: 100%; padding: 10px; border: 1px solid #ef4444; border-radius: 6px; font-size: 15px; box-sizing: border-box; background: white;" />
+                        <small style="color: #64748b; font-size: 12px; display: block; margin-top: 4px;">Indica cuántos partidos estará suspendido este jugador.</small>
+                    </div>
+                ` : ''}
             </div>
             
             <div style="padding: 15px 20px; background: #f1f5f9; border-top: 1px solid #e2e8f0; display: flex; justify-content: flex-end; gap: 10px;">
@@ -5066,26 +6340,53 @@ function openAddTarjetaModal(tab, onSaveCallback) {
             return;
         }
 
-        // Buscar si existe (case insensitive)
-        let playerObj = appData.jugadores.find(j => j.equipoId === eqId && (j.name || j.nombre).toLowerCase() === jName.toLowerCase());
+        // Buscar si existe (ignorando acentos y mayúsculas/minúsculas)
+        let playerObj = appData.jugadores.find(j => j.equipoId === eqId && normalizeString(j.name || j.nombre) === normalizeString(jName));
 
         if (!playerObj) {
-            // Crear nuevo
-            playerObj = {
-                id: Date.now() + "" + Math.floor(Math.random()*1000),
-                equipoId: eqId,
-                nombre: jName,
-                name: jName,
-                isNovato: false,
-                isPortero: false,
-                status: 'activo',
-                transferencias: 0,
-                stats: {
-                    apertura: { goles: 0, amarillas: 0, rojas: 0, golesRecibidos: 0, minutos: 0 },
-                    clausura: { goles: 0, amarillas: 0, rojas: 0, golesRecibidos: 0, minutos: 0 }
+            let existingOtherTeam = appData.jugadores.find(j => normalizeString(j.name || j.nombre) === normalizeString(jName));
+            
+            if (existingOtherTeam) {
+                const equipoObj = appData.equipos.find(eq => eq.id === existingOtherTeam.equipoId);
+                const equipoNombre = equipoObj ? (equipoObj.name || equipoObj.nombre) : "otro equipo";
+                
+                const confirmar = confirm(`El jugador "${jName}" ya existe en el equipo ${equipoNombre.toUpperCase()}. ¿Deseas traspasarlo a este equipo y añadirle la tarjeta?`);
+                if (!confirmar) {
+                    return;
                 }
-            };
-            appData.jugadores.push(playerObj);
+                
+                const equipoOrigenId = existingOtherTeam.equipoId;
+                existingOtherTeam.equipoId = eqId;
+                existingOtherTeam.status = 'activo';
+                
+                appData.movimientos.push({
+                    id: Date.now(),
+                    fecha: new Date().toISOString(),
+                    jugadorId: existingOtherTeam.id,
+                    tipo: 'alta',
+                    equipoOrigenId: equipoOrigenId,
+                    equipoDestinoId: eqId
+                });
+                
+                playerObj = existingOtherTeam;
+            } else {
+                // Crear nuevo
+                playerObj = {
+                    id: Date.now() + "" + Math.floor(Math.random()*1000),
+                    equipoId: eqId,
+                    nombre: jName,
+                    name: jName,
+                    isNovato: false,
+                    isPortero: false,
+                    status: 'activo',
+                    transferencias: 0,
+                    stats: {
+                        apertura: { goles: 0, amarillas: 0, rojas: 0, golesRecibidos: 0, minutos: 0 },
+                        clausura: { goles: 0, amarillas: 0, rojas: 0, golesRecibidos: 0, minutos: 0 }
+                    }
+                };
+                appData.jugadores.push(playerObj);
+            }
         }
 
         const rivalId = selectRival.value;
@@ -5117,6 +6418,16 @@ function openAddTarjetaModal(tab, onSaveCallback) {
         }
 
         playerObj.stats[currentTorneo][tab] = (playerObj.stats[currentTorneo][tab] || 0) + cant;
+
+        if (!isAmarilla) {
+            const inputSancionPartidos = document.getElementById("add-card-sancion-partidos");
+            if (inputSancionPartidos) {
+                const sancVal = parseInt(inputSancionPartidos.value);
+                if (!isNaN(sancVal) && sancVal >= 0) {
+                    playerObj.stats[currentTorneo].sancionPartidos = (playerObj.stats[currentTorneo].sancionPartidos || 0) + sancVal;
+                }
+            }
+        }
         
         saveData();
         if (onSaveCallback) {
@@ -5180,6 +6491,7 @@ const inputStatsGolesRecibidos = document.getElementById("edit-stats-goles-recib
 const groupGolesRecibidos = document.getElementById("group-stats-goles-recibidos");
 const inputStatsAmarillas = document.getElementById("edit-stats-amarillas");
 const inputStatsRojas = document.getElementById("edit-stats-rojas");
+const inputStatsSancionPartidos = document.getElementById("edit-stats-sancion-partidos");
 
 window.openStatsModal = function(playerId) {
     const player = appData.jugadores.find(p => p.id === playerId);
@@ -5188,11 +6500,14 @@ window.openStatsModal = function(playerId) {
     inputStatsId.value = player.id;
     labelStatsName.textContent = player.name;
 
-    const stats = player.stats[currentTorneo];
+    const stats = player.stats[currentTorneo] || {};
     inputStatsMinutos.value = stats.minutos || 0;
     inputStatsGoles.value = stats.goles || 0;
     inputStatsAmarillas.value = stats.amarillas || 0;
     inputStatsRojas.value = stats.rojas || 0;
+    if (inputStatsSancionPartidos) {
+        inputStatsSancionPartidos.value = (typeof stats.sancionPartidos === 'number') ? stats.sancionPartidos : (stats.rojas || 0);
+    }
 
     if (player.isPortero) {
         groupGolesRecibidos.style.display = 'block';
@@ -5221,6 +6536,9 @@ if (btnSaveStatsExtra) {
         player.stats[currentTorneo].goles = parseInt(inputStatsGoles.value) || 0;
         player.stats[currentTorneo].amarillas = parseInt(inputStatsAmarillas.value) || 0;
         player.stats[currentTorneo].rojas = parseInt(inputStatsRojas.value) || 0;
+        if (inputStatsSancionPartidos) {
+            player.stats[currentTorneo].sancionPartidos = parseInt(inputStatsSancionPartidos.value) || 0;
+        }
         
         if(player.isPortero) {
             player.stats[currentTorneo].golesRecibidos = parseInt(inputStatsGolesRecibidos.value) || 0;
@@ -6752,13 +8070,11 @@ setTimeout(async () => {
         });
 
         if (added) {
+            await savePartidosToSupabase();
             await saveData();
             localStorage.setItem('calendario_clausura_injected_final_2', 'true');
-            if (typeof renderSorteos === 'function') {
-                const sorteosView = document.getElementById('view-sorteos');
-                if(sorteosView && sorteosView.classList.contains('active')){
-                    renderSorteos();
-                }
+            if (typeof updateCalendarioUI === 'function') {
+                updateCalendarioUI();
             }
             alert('¡El calendario oficial del Clausura 2026 (17 Jornadas) ha sido importado con éxito!');
         }

@@ -2,6 +2,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     const inputEquipo = document.getElementById('input-equipo');
     const form = document.getElementById('form-inscripcion');
 
+    // Util para capitalizar primera letra de cada palabra
+    function toTitleCase(str) {
+        if (!str) return "";
+        return str.toLowerCase().replace(/(?:^|\s)\S/g, function(a) { return a.toUpperCase(); });
+    }
+
+    // Autocapitalizar nombre al escribir
+    const inputNombres = document.getElementById('input-nombres');
+    if (inputNombres) {
+        inputNombres.addEventListener('input', function(e) {
+            let start = this.selectionStart;
+            let end = this.selectionEnd;
+            this.value = toTitleCase(this.value);
+            this.setSelectionRange(start, end);
+        });
+    }
+
     // Mapeo de meses
     const meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 

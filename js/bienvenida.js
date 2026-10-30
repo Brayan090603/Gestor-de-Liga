@@ -26,10 +26,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     } catch (e) {
         console.error("Fallo crítico de conexión:", e);
-        alert("Error de conexión a la base de datos. Si estás abriendo el archivo directamente (file:///), por favor utiliza 'Live Server' en Visual Studio Code para evitar bloqueos de seguridad del navegador.");
+        alert("Error de conexión a la base de datos: " + (e.message || e));
+    } finally {
+        hideLoader();
     }
-
-    hideLoader();
 
     // --- 2. RENDERIZADO DEL PASO 0 (LANZADOR) ---
     const step0 = document.getElementById("step-0");

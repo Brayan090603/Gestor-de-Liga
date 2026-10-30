@@ -174,7 +174,7 @@ body {
     justify-content: space-between;
     align-items: center;
     border-bottom: 1px solid var(--border-color);
-    background: rgba(15, 23, 42, 0.45);
+    background: rgba(15, 23, 42, 0.92);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
     position: sticky;
@@ -980,6 +980,55 @@ tr.row-suspended td:first-child {
     font-weight: bold;
 }
 
+.badge-cumplida {
+    background-color: rgba(16, 185, 129, 0.2);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.45);
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-size: 11px;
+    margin-left: 6px;
+    font-weight: bold;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.check-sancion-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: 8px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    background: rgba(15, 23, 42, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    cursor: pointer;
+    font-size: 11px;
+    color: #cbd5e1;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    user-select: none;
+    vertical-align: middle;
+}
+.check-sancion-label:hover {
+    background: rgba(30, 41, 59, 0.95);
+    border-color: #10b981;
+    color: #ffffff;
+}
+.check-sancion-label input[type="checkbox"] {
+    cursor: pointer;
+    width: 14px;
+    height: 14px;
+    accent-color: #10b981;
+    margin: 0;
+}
+.check-sancion-label.cumplido {
+    background: rgba(16, 185, 129, 0.15);
+    border-color: rgba(16, 185, 129, 0.4);
+    color: #34d399;
+}
+
 /* --- Finished Tournament Banner --- */
 .finished-banner {
     display: none; /* Controlled by JS */
@@ -1710,6 +1759,8 @@ tr.row-suspended td:first-child {
 .opt-purple { background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%); }
 .opt-green { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
 .opt-yellow { background: linear-gradient(135deg, #eab308 0%, #ca8a04 100%); }
+.opt-cyan { background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%); }
+.opt-red { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }
 
 /* =========================================================
    LIVE MATCH TRACKER (DASHBOARD)
@@ -2443,4 +2494,1422 @@ tr.row-suspended td:first-child {
     #btn-finish-apertura {
         width: 100% !important;
     }
+}
+
+/* ==========================================================================
+   ALINEACIONES TÁCTICAS, FORMACIONES Y GENERADOR DE PÓSTER WHATSAPP
+   ========================================================================== */
+
+/* Barra Superior de la Pestaña Alineación en Match Dashboard */
+.alineacion-top-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+.btn-top-tactical, .btn-top-whatsapp {
+    flex: 1;
+    min-width: 180px;
+    padding: 12px 16px;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 0.88rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    border: none;
+}
+.btn-top-tactical {
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: #f8fafc;
+}
+.btn-top-tactical:hover {
+    background: linear-gradient(135deg, #334155 0%, #1e293b 100%);
+    border-color: var(--accent-primary, #6366f1);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(99, 102, 241, 0.25);
+}
+.btn-top-whatsapp {
+    background: linear-gradient(135deg, #15803d 0%, #166534 100%);
+    color: #ffffff;
+    border: 1px solid rgba(34, 197, 94, 0.4);
+}
+.btn-top-whatsapp:hover {
+    background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(34, 197, 94, 0.35);
+}
+
+.alineacion-col-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+.alineacion-col-header h4 {
+    margin: 0 !important;
+    border: none !important;
+    padding: 0 !important;
+}
+.btn-col-action-pill {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: #cbd5e1;
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s;
+}
+.btn-col-action-pill:hover {
+    background: var(--accent-primary, #6366f1);
+    color: white;
+    border-color: transparent;
+}
+
+/* Mini Cancha Táctica dentro del Dashboard */
+.mini-pitch-preview-box {
+    margin-bottom: 18px;
+    background: #0f2214;
+    border-radius: 12px;
+    border: 1px solid rgba(34, 197, 94, 0.2);
+    overflow: hidden;
+    padding: 10px;
+    position: relative;
+    box-shadow: inset 0 2px 10px rgba(0,0,0,0.5);
+}
+.mini-pitch-field {
+    width: 100%;
+    height: 180px;
+    position: relative;
+    background: linear-gradient(180deg, #14532d 0%, #166534 50%, #14532d 100%);
+    border-radius: 8px;
+    border: 1.5px solid rgba(255,255,255,0.3);
+    overflow: hidden;
+}
+.mini-pitch-markings {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+.mini-half {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: rgba(255,255,255,0.3);
+}
+.mini-circle {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 44px;
+    height: 44px;
+    border: 1px solid rgba(255,255,255,0.3);
+    border-radius: 50%;
+}
+.mini-pitch-dot {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    z-index: 2;
+}
+.mini-dot-inner {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 1.5px solid white;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.4);
+}
+.mini-pitch-dot.mini-gk .mini-dot-inner {
+    background: #f59e0b;
+}
+.mini-pitch-dot.mini-field .mini-dot-inner {
+    background: #3b82f6;
+}
+.mini-pitch-dot.empty .mini-dot-inner {
+    background: rgba(255,255,255,0.2);
+    border-style: dashed;
+}
+.mini-dot-label {
+    font-size: 8px;
+    font-weight: 700;
+    color: white;
+    background: rgba(0,0,0,0.7);
+    padding: 1px 4px;
+    border-radius: 4px;
+    margin-top: 2px;
+    white-space: nowrap;
+    max-width: 50px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.col-action-buttons {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+}
+.btn-col-whatsapp {
+    background: #15803d;
+    color: white;
+    border: none;
+    padding: 12px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: all 0.2s;
+    flex: 1;
+}
+.btn-col-whatsapp:hover {
+    background: #16a34a;
+    transform: translateY(-1px);
+}
+
+/* ==========================================================================
+   MODAL DE PIZARRA TÁCTICA INTERACTIVA (IMAGE 2)
+   ========================================================================== */
+.tactical-modal-overlay {
+    background: rgba(0, 0, 0, 0.88);
+    backdrop-filter: blur(8px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+}
+.tactical-modal-overlay.active {
+    display: flex;
+}
+.tactical-pitch-content {
+    width: 100%;
+    max-width: 520px;
+    height: 94vh;
+    background: #11141a;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 20px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 25px 60px rgba(0,0,0,0.8);
+    padding: 0 !important;
+}
+
+/* Header Pizarra */
+.tactical-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: #181d26;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.tactical-btn-back {
+    background: rgba(255,255,255,0.08);
+    border: none;
+    color: #f1f5f9;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 1rem;
+    transition: background 0.2s;
+}
+.tactical-btn-back:hover {
+    background: rgba(255,255,255,0.2);
+}
+.tactical-title-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+.tactical-subtitle {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+}
+.tactical-team-selector {
+    display: flex;
+    background: #0f1218;
+    padding: 3px;
+    border-radius: 24px;
+    gap: 4px;
+    border: 1px solid rgba(255,255,255,0.06);
+}
+.team-toggle-pill {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.team-toggle-pill img {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+.team-toggle-pill.active {
+    background: #22c55e;
+    color: #052e16;
+}
+.tactical-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.tactical-btn-icon {
+    background: rgba(255,255,255,0.06);
+    border: none;
+    color: #cbd5e1;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 0.95rem;
+    transition: all 0.2s;
+}
+.tactical-btn-icon:hover {
+    background: rgba(255,255,255,0.15);
+    color: white;
+}
+.tactical-btn-icon.check-btn {
+    background: #22c55e;
+    color: #052e16;
+}
+.tactical-btn-icon.check-btn:hover {
+    background: #16a34a;
+    color: white;
+}
+
+/* Cuerpo Pizarra */
+.tactical-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    padding: 12px;
+    gap: 12px;
+}
+
+/* Cancha de Fútbol (Image 2) */
+.tactical-pitch-wrapper {
+    flex: 1;
+    min-height: 380px;
+    max-height: 480px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.tactical-pitch {
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(circle at center, #1b8a3b 0%, #157331 60%, #0d5422 100%);
+    border: 3px solid rgba(255,255,255,0.85);
+    border-radius: 18px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: inset 0 0 40px rgba(0,0,0,0.35), 0 10px 30px rgba(0,0,0,0.5);
+}
+
+/* Marcas reglamentarias */
+.pitch-markings {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+.pitch-half-line {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: rgba(255,255,255,0.7);
+}
+.pitch-center-circle {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 90px;
+    height: 90px;
+    border: 2px solid rgba(255,255,255,0.7);
+    border-radius: 50%;
+}
+.pitch-center-spot {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 6px;
+    height: 6px;
+    background: rgba(255,255,255,0.9);
+    border-radius: 50%;
+}
+.pitch-penalty-area {
+    position: absolute;
+    width: 54%;
+    height: 18%;
+    border: 2px solid rgba(255,255,255,0.7);
+    left: 23%;
+}
+.pitch-penalty-area.top {
+    top: 0;
+    border-top: none;
+    border-radius: 0 0 10px 10px;
+}
+.pitch-penalty-area.bottom {
+    bottom: 0;
+    border-bottom: none;
+    border-radius: 10px 10px 0 0;
+}
+.pitch-goal-area {
+    position: absolute;
+    width: 26%;
+    height: 7%;
+    border: 2px solid rgba(255,255,255,0.7);
+    left: 37%;
+}
+.pitch-goal-area.top {
+    top: 0;
+    border-top: none;
+}
+.pitch-goal-area.bottom {
+    bottom: 0;
+    border-bottom: none;
+}
+.pitch-penalty-spot {
+    position: absolute;
+    width: 5px;
+    height: 5px;
+    background: rgba(255,255,255,0.9);
+    border-radius: 50%;
+    left: 50%;
+    transform: translateX(-50%);
+}
+.pitch-penalty-spot.top { top: 12%; }
+.pitch-penalty-spot.bottom { bottom: 12%; }
+.pitch-corner {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255,255,255,0.7);
+}
+.pitch-corner.top-left { top: 0; left: 0; border-right: none; border-bottom: none; border-radius: 0 0 14px 0; }
+.pitch-corner.top-right { top: 0; right: 0; border-left: none; border-bottom: none; border-radius: 0 0 0 14px; }
+.pitch-corner.bottom-left { bottom: 0; left: 0; border-right: none; border-top: none; border-radius: 0 14px 0 0; }
+.pitch-corner.bottom-right { bottom: 0; right: 0; border-left: none; border-top: none; border-radius: 14px 0 0 0; }
+
+/* Capa de Jugadores en la Cancha */
+.pitch-players-layer {
+    position: absolute;
+    inset: 0;
+}
+.tactical-slot {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    cursor: pointer;
+    user-select: none;
+    z-index: 5;
+    transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.tactical-slot:hover {
+    transform: translate(-50%, -50%) scale(1.08);
+    z-index: 10;
+}
+.tactical-slot.dragging {
+    opacity: 0.4;
+    transform: translate(-50%, -50%) scale(0.9);
+}
+.tactical-slot.drag-over .slot-circle {
+    box-shadow: 0 0 0 4px #22c55e, 0 0 20px rgba(34, 197, 94, 0.8) !important;
+}
+
+.slot-token {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+}
+.slot-token.token-selected .slot-circle {
+    box-shadow: 0 0 0 4px #a855f7, 0 0 25px rgba(168, 85, 247, 0.9) !important;
+    animation: pulseSelected 1.2s infinite ease-in-out;
+}
+@keyframes pulseSelected {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.06); }
+}
+
+.slot-circle {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    border: 2.5px solid #ffffff;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    background: #0f172a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: visible;
+}
+.tactical-slot.is-gk .slot-circle {
+    border-color: #f59e0b;
+    box-shadow: 0 4px 14px rgba(245, 158, 11, 0.45);
+}
+.slot-avatar-img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+}
+.slot-jersey-icon {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+    position: relative;
+}
+.slot-jersey-icon.jersey-field {
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    color: white;
+}
+.slot-jersey-icon.jersey-gk {
+    background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%);
+    color: white;
+}
+.slot-circle.empty-circle {
+    background: rgba(0, 0, 0, 0.4);
+    border: 2px dashed rgba(255,255,255,0.7);
+    color: rgba(255,255,255,0.8);
+    font-size: 1rem;
+}
+.slot-dorsal-badge {
+    position: absolute;
+    bottom: -3px;
+    right: -3px;
+    background: #0f172a;
+    color: #ffffff;
+    border: 1px solid rgba(255,255,255,0.6);
+    font-size: 9px;
+    font-weight: 800;
+    min-width: 16px;
+    height: 16px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 2px;
+}
+.slot-name-badge {
+    margin-top: 3px;
+    background: rgba(0, 0, 0, 0.78);
+    backdrop-filter: blur(4px);
+    color: #ffffff;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 8px;
+    white-space: nowrap;
+    max-width: 76px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: center;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+    letter-spacing: 0.3px;
+}
+.slot-name-badge.empty-label {
+    background: rgba(0, 0, 0, 0.55);
+    color: #cbd5e1;
+}
+
+/* Banquillo / Suplentes (Dock Inferior - Image 2) */
+.tactical-bench-container {
+    background: #181d26;
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,0.08);
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.bench-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.bench-title {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #cbd5e1;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.bench-count {
+    background: rgba(255,255,255,0.1);
+    color: #94a3b8;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 10px;
+}
+.bench-players-strip {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    padding: 4px 2px 8px 2px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.2) transparent;
+}
+.bench-players-strip::-webkit-scrollbar {
+    height: 4px;
+}
+.bench-players-strip::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.2);
+    border-radius: 4px;
+}
+.bench-empty-msg {
+    color: #64748b;
+    font-size: 0.8rem;
+    padding: 8px 0;
+    text-align: center;
+    width: 100%;
+}
+.bench-player-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    cursor: pointer;
+    flex-shrink: 0;
+    user-select: none;
+    transition: transform 0.2s;
+}
+.bench-player-item:hover {
+    transform: translateY(-2px);
+}
+.bench-player-item.selected .bench-avatar-wrap {
+    box-shadow: 0 0 0 3px #a855f7, 0 0 15px rgba(168, 85, 247, 0.8);
+    transform: scale(1.08);
+}
+.bench-avatar-wrap {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.7);
+    background: #0f172a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    box-shadow: 0 3px 8px rgba(0,0,0,0.4);
+    transition: all 0.2s;
+}
+.bench-avatar-img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+}
+.bench-jersey-icon {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+}
+.bench-jersey-icon.jersey-field {
+    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+    color: white;
+}
+.bench-jersey-icon.jersey-gk {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    color: white;
+}
+.bench-dorsal {
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    background: #11141a;
+    color: #fff;
+    font-size: 8px;
+    font-weight: 800;
+    min-width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(255,255,255,0.5);
+}
+.bench-player-name {
+    font-size: 9px;
+    font-weight: 600;
+    color: #94a3b8;
+    margin-top: 4px;
+    max-width: 58px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: center;
+}
+
+/* Barra Inferior Pizarra (Image 2) */
+.tactical-bottom-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    padding: 10px 16px;
+    background: #181d26;
+    border-top: 1px solid rgba(255,255,255,0.08);
+    gap: 12px;
+}
+.tactical-bottom-btn {
+    flex: 1;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: #f1f5f9;
+    padding: 10px;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 0.82rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.tactical-bottom-btn:hover {
+    background: rgba(255,255,255,0.14);
+    transform: translateY(-2px);
+}
+.tactical-bottom-btn.whatsapp-highlight {
+    background: linear-gradient(135deg, #15803d 0%, #166534 100%);
+    border-color: #22c55e;
+    color: white;
+}
+.tactical-bottom-btn.whatsapp-highlight:hover {
+    background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+    box-shadow: 0 4px 15px rgba(34, 197, 94, 0.4);
+}
+
+/* ==========================================================================
+   MODAL ESCOGER FORMACIÓN (IMAGE 1)
+   ========================================================================== */
+.formation-modal-overlay {
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(6px);
+    display: none;
+    align-items: flex-end;
+    justify-content: center;
+}
+.formation-modal-overlay.active {
+    display: flex;
+}
+.formation-picker-content {
+    width: 100%;
+    max-width: 480px;
+    max-height: 82vh;
+    background: #18181b;
+    border-radius: 26px 26px 0 0;
+    border: 1px solid rgba(255,255,255,0.1);
+    display: flex;
+    flex-direction: column;
+    padding: 16px 20px 24px 20px !important;
+    animation: slideUpModal 0.28s ease-out;
+}
+@keyframes slideUpModal {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+}
+.formation-picker-handle {
+    width: 44px;
+    height: 5px;
+    background: rgba(255,255,255,0.25);
+    border-radius: 4px;
+    margin: 0 auto 14px auto;
+}
+.formation-picker-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+.formation-picker-header h3 {
+    margin: 0;
+    font-size: 1.3rem;
+    font-weight: 800;
+    color: #ffffff;
+}
+.formation-picker-sub {
+    font-size: 0.85rem;
+    color: #94a3b8;
+}
+.formation-section {
+    margin-bottom: 18px;
+}
+.formation-section-title {
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: #ffffff;
+    display: block;
+    margin-bottom: 4px;
+}
+.formation-section-desc {
+    font-size: 0.85rem;
+    color: #94a3b8;
+    margin: 0 0 12px 0;
+}
+.player-count-chips {
+    display: flex;
+    gap: 8px;
+}
+.player-count-chip {
+    background: #27272a;
+    border: 1px solid rgba(255,255,255,0.1);
+    color: #cbd5e1;
+    padding: 8px 18px;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.player-count-chip:hover {
+    background: #3f3f46;
+}
+.player-count-chip.active {
+    background: #7c3aed;
+    color: #ffffff;
+    border-color: #a855f7;
+    box-shadow: 0 4px 14px rgba(124, 58, 237, 0.4);
+}
+.formation-list-section {
+    flex: 1;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+.formation-options-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.formation-option-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 18px;
+    border-radius: 14px;
+    background: #27272a;
+    border: 1px solid rgba(255,255,255,0.06);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.formation-option-item:hover {
+    background: #3f3f46;
+}
+.formation-option-item.selected {
+    background: #581c87;
+    border-color: #a855f7;
+    box-shadow: 0 4px 16px rgba(168, 85, 247, 0.25);
+}
+.formation-name {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #ffffff;
+}
+.formation-radio {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.3);
+    position: relative;
+    transition: all 0.2s;
+}
+.formation-radio.checked {
+    border-color: #a855f7;
+    background: #a855f7;
+    box-shadow: 0 0 10px #a855f7;
+}
+
+/* ==========================================================================
+   MODAL DE ASIGNAR JUGADOR EN POSICIÓN ESPECÍFICA
+   ========================================================================== */
+.pitch-player-options-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.pitch-player-option {
+    display: flex;
+    align-items: center;
+    padding: 10px 14px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.pitch-player-option:hover {
+    background: rgba(255,255,255,0.12);
+    border-color: rgba(255,255,255,0.2);
+}
+.pitch-player-option.is-active {
+    background: rgba(99, 102, 241, 0.2);
+    border-color: var(--accent-primary, #6366f1);
+}
+.pitch-player-option.send-bench-opt {
+    background: rgba(245, 158, 11, 0.15);
+    border-color: rgba(245, 158, 11, 0.4);
+    margin-bottom: 8px;
+}
+.mini-jersey {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: #334155;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.badge-actual {
+    background: var(--accent-primary, #6366f1);
+    color: white;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 6px;
+}
+
+/* ==========================================================================
+   MODAL COMPARTIR ALINEACIÓN EN WHATSAPP (IMAGE 3)
+   ========================================================================== */
+.share-lineup-modal-overlay {
+    background: rgba(0, 0, 0, 0.9);
+    backdrop-filter: blur(10px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+}
+.share-lineup-modal-overlay.active {
+    display: flex;
+}
+.share-lineup-content {
+    width: 100%;
+    max-width: 500px;
+    max-height: 95vh;
+    background: #11141a;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 20px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 0 !important;
+}
+.share-lineup-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+}
+.share-team-tabs {
+    display: flex;
+    background: #1e2430;
+    padding: 4px;
+    border-radius: 12px;
+    gap: 4px;
+    width: 100%;
+}
+.share-team-tab {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+}
+.share-team-tab.active {
+    background: #22c55e;
+    color: #052e16;
+}
+
+/* Contenedor del Póster */
+.poster-preview-container {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+}
+
+/* Tarjeta del Póster para WhatsApp (Image 3) */
+.whatsapp-poster-card {
+    width: 380px;
+    height: 570px;
+    position: relative;
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.85);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 18px 16px 20px 16px;
+}
+.poster-grass-bg {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center bottom;
+    z-index: 1;
+}
+.poster-vignette {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.05) 50%, rgba(0,0,0,0.85) 100%);
+    z-index: 2;
+}
+
+/* Marca superior en el póster */
+.poster-top-bar {
+    position: relative;
+    z-index: 5;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+.poster-brand {
+    display: flex;
+    flex-direction: column;
+}
+.poster-brand-sub {
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 1.5px;
+    color: rgba(255,255,255,0.75);
+}
+.poster-brand-main {
+    font-size: 13px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    color: #ffffff;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.6);
+}
+.poster-formation-tag {
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(4px);
+    border: 1px solid rgba(255,255,255,0.25);
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 800;
+    padding: 3px 10px;
+    border-radius: 12px;
+    letter-spacing: 1px;
+}
+
+/* Cancha 3D en el Póster (Image 3) */
+.poster-pitch-wrapper {
+    position: relative;
+    z-index: 4;
+    width: 100%;
+    height: 340px;
+    perspective: 800px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: -10px;
+}
+.poster-pitch {
+    width: 90%;
+    height: 92%;
+    position: relative;
+    transform: rotateX(22deg) scale(0.96);
+    transform-origin: center bottom;
+    border: 2px solid rgba(255,255,255,0.6);
+    border-radius: 8px;
+    background: rgba(34, 197, 94, 0.15);
+    box-shadow: inset 0 0 25px rgba(0,0,0,0.2);
+}
+.pitch-lines {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+.pl-half {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 1.5px;
+    background: rgba(255,255,255,0.5);
+}
+.pl-circle {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 65px;
+    height: 65px;
+    border: 1.5px solid rgba(255,255,255,0.5);
+    border-radius: 50%;
+}
+.pl-spot {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 5px;
+    height: 5px;
+    background: rgba(255,255,255,0.8);
+    border-radius: 50%;
+}
+.pl-box-top, .pl-box-bot {
+    position: absolute;
+    width: 52%;
+    height: 18%;
+    border: 1.5px solid rgba(255,255,255,0.5);
+    left: 24%;
+}
+.pl-box-top { top: 0; border-top: none; }
+.pl-box-bot { bottom: 0; border-bottom: none; }
+.pl-goal-top, .pl-goal-bot {
+    position: absolute;
+    width: 26%;
+    height: 7%;
+    border: 1.5px solid rgba(255,255,255,0.5);
+    left: 37%;
+}
+.pl-goal-top { top: 0; border-top: none; }
+.pl-goal-bot { bottom: 0; border-bottom: none; }
+
+/* Capa de Jugadores en el Póster */
+.poster-players-layer {
+    position: absolute;
+    inset: 0;
+}
+.poster-player-slot {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    z-index: 6;
+}
+.poster-avatar-ring {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 2.2px solid #ffffff;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.6);
+    background: #0f172a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+.poster-player-slot.is-gk .poster-avatar-ring {
+    border-color: #f59e0b;
+}
+.poster-avatar-ring.empty-ring {
+    background: rgba(0,0,0,0.5);
+    border: 1.5px dashed rgba(255,255,255,0.6);
+    color: rgba(255,255,255,0.8);
+    font-size: 0.9rem;
+}
+.poster-avatar-img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+}
+.poster-jersey-icon {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+}
+.poster-jersey-icon.jersey-field {
+    background: linear-gradient(135deg, #10b981 0%, #047857 100%);
+    color: white;
+}
+.poster-jersey-icon.jersey-gk {
+    background: linear-gradient(135deg, #f97316 0%, #c2410c 100%);
+    color: white;
+}
+.poster-name-tag {
+    margin-top: 2px;
+    background: rgba(0, 0, 0, 0.72);
+    color: #ffffff;
+    font-size: 8.5px;
+    font-weight: 800;
+    padding: 1.5px 5px;
+    border-radius: 6px;
+    white-space: nowrap;
+    max-width: 65px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: center;
+    letter-spacing: 0.3px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+}
+
+/* Sección Inferior del Póster: Escudos VS, LINE UP y Fecha (Image 3) */
+.poster-bottom-info {
+    position: relative;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+.poster-match-matchup {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 2px;
+}
+.poster-crest-box {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    border: 2px solid #ffffff;
+    background: #11141a;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.6);
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.poster-crest-box img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.poster-vs-badge {
+    font-size: 1.15rem;
+    font-weight: 900;
+    font-style: italic;
+    color: #ffffff;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+    letter-spacing: 1px;
+}
+.poster-title-lineup {
+    margin: 0 !important;
+    font-size: 2.2rem;
+    font-weight: 900;
+    font-style: italic;
+    color: #ffffff;
+    letter-spacing: 3px;
+    text-shadow: 0 4px 15px rgba(0,0,0,0.7);
+    line-height: 1;
+}
+.poster-team-name-sub {
+    font-size: 0.85rem;
+    font-weight: 800;
+    color: #a7f3d0;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    text-shadow: 0 2px 6px rgba(0,0,0,0.6);
+}
+.poster-date-text {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: rgba(255,255,255,0.88);
+    text-shadow: 0 2px 6px rgba(0,0,0,0.6);
+}
+
+/* Footer con Botones de Acción */
+.share-lineup-footer {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px 18px;
+    background: #181d26;
+    border-top: 1px solid rgba(255,255,255,0.08);
+}
+.btn-whatsapp-share {
+    width: 100%;
+    background: linear-gradient(135deg, #25D366 0%, #128C7E 100%);
+    color: #ffffff;
+    border: none;
+    padding: 14px;
+    border-radius: 12px;
+    font-weight: 800;
+    font-size: 1.05rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    cursor: pointer;
+    box-shadow: 0 4px 20px rgba(37, 211, 102, 0.35);
+    transition: all 0.25s;
+}
+.btn-whatsapp-share:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 25px rgba(37, 211, 102, 0.5);
+}
+.share-secondary-btns {
+    display: flex;
+    gap: 10px;
+}
+.btn-secondary-action {
+    flex: 1;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: #cbd5e1;
+    padding: 10px;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.btn-secondary-action:hover {
+    background: rgba(255,255,255,0.16);
+    color: white;
+}
+
+/* =========================================================
+   SELECTOR DINÁMICO DE EQUIPOS PARA CALENDARIOS
+========================================================= */
+.sorteo-equipos-wrapper {
+    margin-top: 25px;
+    background: rgba(15, 23, 42, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    padding: 22px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+}
+
+.sorteo-team-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    background: rgba(30, 41, 59, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+    position: relative;
+}
+
+.sorteo-team-card:hover {
+    background: rgba(51, 65, 85, 0.6);
+    border-color: rgba(59, 130, 246, 0.4);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+.sorteo-team-card.selected {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.18) 0%, rgba(37, 99, 235, 0.28) 100%);
+    border-color: #3b82f6;
+    box-shadow: 0 4px 15px rgba(37, 99, 235, 0.25);
+}
+
+.sorteo-team-card input[type="checkbox"] {
+    accent-color: #3b82f6;
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    border-radius: 4px;
+    flex-shrink: 0;
+}
+
+.sorteo-team-logo {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+    background: rgba(0,0,0,0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    color: var(--accent-primary);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    flex-shrink: 0;
+}
+
+.sorteo-team-name {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #f1f5f9;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+}
+
+.btn-quick-sel {
+    padding: 6px 12px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    color: #e2e8f0;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-quick-sel:hover {
+    background: rgba(59, 130, 246, 0.2);
+    border-color: #3b82f6;
+    color: #93c5fd;
+}
+
+.btn-sugerencia-cal:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.2);
 }
