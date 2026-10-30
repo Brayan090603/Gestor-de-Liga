@@ -1,0 +1,250 @@
+
+/* ==========================================================================
+   VISTA INICIO / DASHBOARD
+   ========================================================================== */
+
+#view-inicio {
+    padding-top: 0;
+    overflow-x: hidden;
+}
+
+.inicio-header {
+    position: relative;
+    width: 100%;
+    margin-bottom: 2rem;
+}
+
+.inicio-cover {
+    width: 100%;
+    height: 180px;
+    background-size: cover;
+    background-position: center;
+    position: relative;
+    border-radius: 0 0 20px 20px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+}
+
+.inicio-cover-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top, var(--bg-primary) 5%, transparent 60%);
+    border-radius: 0 0 20px 20px;
+}
+
+.inicio-header-content {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-top: -60px;
+    text-align: center;
+    padding: 0 20px;
+}
+
+.inicio-logo {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid var(--accent-primary);
+    background-color: var(--card-bg);
+    box-shadow: 0 4px 20px rgba(59, 130, 246, 0.4);
+    z-index: 2;
+    margin-bottom: 15px;
+}
+
+#inicio-title {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    margin-bottom: 5px;
+    letter-spacing: 0.5px;
+}
+
+.inicio-slogan {
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+    font-style: italic;
+    opacity: 0.9;
+}
+
+.inicio-body {
+    padding: 0 20px 40px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.inicio-card {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 15px 20px;
+    box-shadow: var(--shadow-sm);
+}
+
+.dates-card {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    font-weight: 500;
+    color: var(--text-primary);
+    justify-content: center;
+    text-align: center;
+}
+
+.text-primary {
+    color: var(--accent-primary) !important;
+}
+
+.text-muted {
+    color: var(--text-muted);
+}
+
+.info-card {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.info-row {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    font-size: 0.95rem;
+    color: var(--text-primary);
+}
+
+.info-row i:not(.small-icon) {
+    width: 20px;
+    text-align: center;
+    font-size: 1.1rem;
+}
+
+.small-icon {
+    font-size: 0.75rem;
+    margin-left: 5px;
+}
+
+.inicio-section {
+    background-color: var(--card-bg);
+    border-radius: 12px;
+    padding: 20px;
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-sm);
+}
+
+.inicio-section-title {
+    font-size: 1.2rem;
+    font-weight: 700;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 10px;
+}
+
+/* Podium Styles */
+.podium-container {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 15px;
+    padding-top: 30px;
+    height: 220px;
+}
+
+.podium-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 90px;
+}
+
+.podium-badge {
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 10px;
+    margin-bottom: -10px;
+    z-index: 2;
+    border: 1px solid var(--border-color);
+}
+
+.podium-circle {
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    box-shadow: inset 0 0 15px rgba(0,0,0,0.5), 0 4px 10px rgba(0,0,0,0.3);
+    border: 4px solid;
+    position: relative;
+    overflow: hidden;
+}
+
+.podium-circle i {
+    text-shadow: 0 2px 5px rgba(0,0,0,0.5);
+}
+
+.gold {
+    border-color: #FBBF24;
+    background: linear-gradient(135deg, #10B981, #059669); /* Using the green from the screenshot */
+    width: 90px;
+    height: 90px;
+}
+.gold i { color: #FBBF24; font-size: 2.5rem; }
+
+.silver {
+    border-color: #9CA3AF;
+    background: linear-gradient(135deg, #10B981, #059669);
+}
+.silver i { color: #9CA3AF; }
+
+.bronze {
+    border-color: #D97706;
+    background: linear-gradient(135deg, #10B981, #059669);
+}
+.bronze i { color: #D97706; }
+
+.place-1 {
+    transform: translateY(-20px);
+}
+
+.podium-team-name {
+    margin-top: 10px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-align: center;
+    text-transform: uppercase;
+    color: var(--text-primary);
+}
+
+/* Premios List */
+.premios-list {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.premio-item {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.premio-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.premio-value {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    text-transform: uppercase;
+}
+
