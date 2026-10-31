@@ -482,37 +482,126 @@ body {
     }
 }
 
-/* Responsive */
+/* Responsive Mobile Layout (<= 768px) */
 @media (max-width: 768px) {
+    body {
+        overflow-x: hidden;
+    }
+
     .app-container {
         flex-direction: column;
+        height: auto;
+        min-height: 100vh;
+        overflow-x: hidden;
+        overflow-y: visible;
     }
     
     .sidebar {
         width: 100%;
+        height: auto;
         border-right: none;
         border-bottom: 1px solid var(--border-color);
+        overflow: visible;
+        flex-shrink: 0;
+    }
+    
+    .logo-container {
+        padding: 12px 15px;
+        flex-direction: row;
+        justify-content: center;
+        gap: 12px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .logo-container .logo-icon {
+        font-size: 26px;
+        margin-bottom: 0;
+    }
+
+    .logo-container h1 {
+        font-size: 18px;
+        margin-bottom: 0;
+        text-align: left;
+    }
+
+    .logo-container .subtitle {
+        display: none;
+    }
+
+    .nav-section-title {
+        display: none;
     }
     
     .main-nav {
         flex-direction: row;
         overflow-x: auto;
-        padding: 10px;
+        overflow-y: hidden;
+        white-space: nowrap;
+        padding: 8px 12px;
+        gap: 6px;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+
+    .main-nav::-webkit-scrollbar {
+        display: none;
+    }
+
+    .main-nav hr {
+        display: none;
+    }
+
+    .nav-item-group {
+        display: inline-flex;
+        margin-bottom: 0;
+    }
+
+    .nav-submenu {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        box-shadow: var(--shadow-lg);
+        z-index: 50;
+        min-width: 160px;
     }
     
     .nav-item {
         white-space: nowrap;
         border-left: none;
         border-bottom: 3px solid transparent;
+        padding: 8px 14px;
+        font-size: 13px;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.03);
     }
     
     .nav-item.active {
         border-left: none;
         border-bottom-color: var(--accent-primary);
+        background: rgba(16, 185, 129, 0.15);
+    }
+
+    .nav-item i {
+        margin-right: 6px;
+        font-size: 14px;
+    }
+
+    /* Ocultar el botón inferior duplicado en móvil */
+    .sidebar > div:last-child {
+        display: none !important;
+    }
+
+    .main-content {
+        overflow: visible;
+        width: 100%;
     }
     
     .dashboard-area {
-        padding: 20px;
+        padding: 15px 12px;
+        gap: 18px;
     }
 }
 
@@ -2447,21 +2536,51 @@ tr.row-suspended td:first-child {
         padding: 0 20px;
     }
     .main-nav::-webkit-scrollbar { display: none; }
-    header {
+    .top-header {
+        padding: 12px 15px;
         flex-direction: column;
-        align-items: flex-start !important;
-        gap: 15px;
+        align-items: stretch !important;
+        gap: 12px;
+        position: relative;
+    }
+    .top-header > div:first-child {
+        min-width: 0;
+        width: 100%;
+    }
+    .header-title h2 {
+        font-size: 20px;
     }
     .header-right-panel {
         flex-direction: column;
-        align-items: flex-start !important;
-        gap: 15px !important;
+        align-items: stretch !important;
+        gap: 10px !important;
         width: 100%;
     }
     .header-actions {
-        flex-direction: column;
-        align-items: flex-start !important;
+        flex-direction: row !important;
+        flex-wrap: wrap;
+        align-items: center !important;
+        justify-content: space-between;
+        gap: 8px !important;
         width: 100%;
+    }
+    .tournament-selector {
+        flex: 1;
+        justify-content: center;
+    }
+    .tournament-btn {
+        flex: 1;
+        text-align: center;
+        padding: 6px 12px;
+        font-size: 13px;
+    }
+    #btn-finish-apertura {
+        width: auto !important;
+        padding: 6px 14px;
+        font-size: 12px;
+    }
+    .user-profile {
+        display: none;
     }
     .team-detail-actions {
         position: static !important;
@@ -2490,9 +2609,6 @@ tr.row-suspended td:first-child {
     }
     .team-detail-info h2 {
         text-align: center;
-    }
-    #btn-finish-apertura {
-        width: 100% !important;
     }
 }
 
