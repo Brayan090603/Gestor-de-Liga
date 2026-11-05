@@ -18,6 +18,80 @@ const tabTitles = {
     porteros: { title: "Porteros Menos Goleados", statName: "Goles Recibidos" }
 };
 
+// --- SISTEMA DE NOTIFICACIONES MODERNO 100% NATIVO (CENTRADAS, ELEGANTES Y CON AUTO-CIERRE) ---
+(function() {
+    window.showToast = function(msg, type = 'success') {
+        const text = String(msg || '');
+        const isError = type === 'error' || text.toLowerCase().includes('error') || text.toLowerCase().includes('falló') || text.toLowerCase().includes('no puedes') || text.toLowerCase().includes('debes') || text.toLowerCase().includes('inválido');
+
+        // Remover notificación anterior si existe
+        const prev = document.getElementById('custom-app-toast');
+        if (prev) prev.remove();
+
+        // Crear toast flotante centrado
+        const toast = document.createElement('div');
+        toast.id = 'custom-app-toast';
+        toast.className = `custom-center-toast ${isError ? 'toast-error' : 'toast-success'}`;
+        
+        const iconHtml = isError 
+            ? `<div class="toast-icon-circle error"><i class="fa-solid fa-xmark"></i></div>`
+            : `<div class="toast-icon-circle success"><i class="fa-solid fa-check"></i></div>`;
+
+        toast.innerHTML = `
+            ${iconHtml}
+            <div class="toast-msg-text">${text}</div>
+        `;
+
+        // Click para cerrar inmediatamente si el usuario lo toca
+        toast.addEventListener('click', () => {
+            toast.classList.add('fade-out');
+            setTimeout(() => toast.remove(), 250);
+        });
+
+        document.body.appendChild(toast);
+
+        // Auto-cierre estricto en 2 segundos
+        setTimeout(() => {
+            if (document.body.contains(toast)) {
+                toast.classList.add('fade-out');
+                setTimeout(() => {
+                    if (document.body.contains(toast)) toast.remove();
+                }, 300);
+            }
+        }, 2000);
+    };
+
+    // Reemplazar window.alert por showToast
+    window.alert = function(msg) {
+        window.showToast(msg, 'info');
+    };
+})();
+
+    // Helper moderno para reemplazar confirm() con diálogos oscuros elegantes
+    window.customConfirm = async function(title, text = '', confirmText = 'Aceptar', isDanger = false) {
+        if (typeof Swal !== 'undefined') {
+            const res = await Swal.fire({
+                title: title,
+                text: text,
+                icon: isDanger ? 'warning' : 'question',
+                showCancelButton: true,
+                confirmButtonColor: isDanger ? '#ef4444' : '#10b981',
+                cancelButtonColor: '#334155',
+                confirmButtonText: confirmText,
+                cancelButtonText: 'Cancelar',
+                customClass: {
+                    popup: 'modern-dark-popup',
+                    confirmButton: 'modern-swal-btn',
+                    cancelButton: 'modern-swal-cancel-btn'
+                },
+                background: '#0f172a',
+                color: '#f8fafc'
+            });
+            return res.isConfirmed;
+        }
+        return window.confirm(text ? `${title}\n\n${text}` : title);
+    };
+
 // Util para normalizar texto (quitar acentos y pasar a minúsculas)
 function normalizeString(str) {
     if (!str) return "";
@@ -43,6 +117,34 @@ document.addEventListener('input', function(e) {
 
 // State Management
 let activeId = localStorage.getItem('femfutpal_active_id');
+
+// Limpieza forzada de los 3 calendarios eliminados en la memoria local (localStorage) del navegador
+(function() {
+    try {
+        const delCals = ['Torneo Principal', 'ELIMINATORIAS', 'REH'];
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith('femfutpal_calendarios_')) {
+                const stored = JSON.parse(localStorage.getItem(key) || '[]');
+                const filtered = stored.filter(c => !delCals.includes(c) && c !== '__DELETED__');
+                localStorage.setItem(key, JSON.stringify(filtered));
+            }
+            if (key && key.startsWith('femfutpal_selected_cal_')) {
+                const cur = localStorage.getItem(key);
+                if (delCals.includes(cur)) {
+                    localStorage.removeItem(key);
+                }
+            }
+            if (key && key.startsWith('femfutpal_partidos_')) {
+                const partidos = JSON.parse(localStorage.getItem(key) || '[]');
+                const filteredPartidos = partidos.filter(p => !delCals.includes(p.calendario_nombre) && p.calendario_nombre !== '__DELETED__');
+                localStorage.setItem(key, JSON.stringify(filteredPartidos));
+            }
+        }
+    } catch(e) {
+        console.warn("Error limpiando cache de calendarios:", e);
+    }
+})();
 
 if (!activeId) {
     window.location.href = 'index.html';
@@ -233,30 +335,29 @@ async function loadDataFromSupabase() {
     }
 
     // Inicializar lista de calendarios disponibles
-    let uniqueCalendarios = [...new Set(appData.partidos.map(p => p.calendario_nombre).filter(Boolean))];
+    let uniqueCalendarios = [...new Set(appData.partidos.map(p => p.calendario_nombre).filter(c => Boolean(c) && c !== '__DELETED__'))];
     
-    // Unir con calendarios guardados en localStorage
+    // Unir con calendarios guardados en localStorage solo si son válidos
     const savedCals = localStorage.getItem(`femfutpal_calendarios_${activeId}`);
     if (savedCals) {
         try {
             const parsedCals = JSON.parse(savedCals);
             parsedCals.forEach(c => {
-                if (!uniqueCalendarios.includes(c) && c !== '__DELETED__') {
+                if (!uniqueCalendarios.includes(c) && c !== '__DELETED__' && c !== 'Torneo Principal' && c !== 'ELIMINATORIAS' && c !== 'REH') {
                     uniqueCalendarios.push(c);
                 }
             });
         } catch(e) {}
     }
     
-    if (uniqueCalendarios.length === 0) uniqueCalendarios.push('Torneo Principal');
     window.calendariosDisponibles = uniqueCalendarios;
 
-    // Restaurar calendario seleccionado
+    // Restaurar calendario seleccionado si existe
     const savedSelectedCal = localStorage.getItem(`femfutpal_selected_cal_${activeId}`);
     if (savedSelectedCal && window.calendariosDisponibles.includes(savedSelectedCal)) {
         window.currentCalendarioNombre = savedSelectedCal;
     } else {
-        window.currentCalendarioNombre = window.calendariosDisponibles[0] || 'Torneo Principal';
+        window.currentCalendarioNombre = window.calendariosDisponibles.length > 0 ? window.calendariosDisponibles[0] : '';
     }
 
     console.log("Partidos cargados en memoria:", appData.partidos.length, "Calendario activo:", window.currentCalendarioNombre, "Torneo:", currentTorneo);
@@ -427,8 +528,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     
     try {
     // Initialize fallback for calendarios if loadDataFromSupabase failed
-    window.currentCalendarioNombre = window.currentCalendarioNombre || 'Torneo Principal';
-    window.calendariosDisponibles = window.calendariosDisponibles || ['Torneo Principal'];
+    window.currentCalendarioNombre = window.currentCalendarioNombre || '';
+    window.calendariosDisponibles = window.calendariosDisponibles || [];
 
     // Nav Items
     const navItems = document.querySelectorAll(".nav-item:not(#btn-open-admin):not(.external)");
@@ -1645,31 +1746,143 @@ document.addEventListener("DOMContentLoaded", async () => {
     function updateCalendarioUI() {
         window.manualCalendars = window.manualCalendars || [];
         const sel = document.getElementById("calendario-selector");
+        const btnEliminarCal = document.getElementById("btn-eliminar-calendario");
+        
         if (sel) {
-            sel.innerHTML = window.calendariosDisponibles.map(c => `<option value="${c}" ${c === window.currentCalendarioNombre ? 'selected' : ''}>${c}</option>`).join('');
+            if (window.calendariosDisponibles.length === 0) {
+                sel.innerHTML = `<option value="">(Sin calendarios creados)</option>`;
+                sel.disabled = true;
+                if (btnEliminarCal) btnEliminarCal.style.display = 'none';
+            } else {
+                sel.disabled = false;
+                if (btnEliminarCal) btnEliminarCal.style.display = 'inline-flex';
+                sel.innerHTML = window.calendariosDisponibles.map(c => `<option value="${c}" ${c === window.currentCalendarioNombre ? 'selected' : ''}>${c}</option>`).join('');
+            }
         }
         
-        // Save available and selected calendars to localStorage
+        // Guardar calendarios en localStorage
         localStorage.setItem(`femfutpal_calendarios_${activeId}`, JSON.stringify(window.calendariosDisponibles));
-        localStorage.setItem(`femfutpal_selected_cal_${activeId}`, window.currentCalendarioNombre);
+        localStorage.setItem(`femfutpal_selected_cal_${activeId}`, window.currentCalendarioNombre || '');
 
-        const matchesInCurrent = appData.partidos.filter(p => p.torneo === currentTorneo && p.calendario_nombre === window.currentCalendarioNombre);
+        const matchesInCurrent = window.currentCalendarioNombre 
+            ? appData.partidos.filter(p => p.torneo === currentTorneo && p.calendario_nombre === window.currentCalendarioNombre) 
+            : [];
         const isManual = window.manualCalendars.includes(window.currentCalendarioNombre);
 
+        const calHeader = document.querySelector(".calendar-dashboard-header");
         const panelGenerar = document.getElementById("panel-generar-calendario");
         const panelFase = document.getElementById("panel-agregar-fase");
+        const sorteoResultadosContainer = document.getElementById("sorteo-resultados-container");
+        const resultadosSection = document.getElementById("sorteo-resultados-section");
 
-        if (matchesInCurrent.length > 0 || isManual) {
-            if(panelGenerar) panelGenerar.style.display = 'none';
-            if(panelFase) panelFase.style.display = 'none';
+        if (window.calendariosDisponibles.length === 0) {
+            // No hay calendarios creados: Ocultar caja superior y resultados vacíos
+            if (calHeader) calHeader.style.display = 'none';
+            if (panelFase) panelFase.style.display = 'none';
+            if (resultadosSection) resultadosSection.style.display = 'none';
+
+            // Mostrar Interfaz Creativa Épica con fondo de estadio, partículas e iluminación
+            if (panelGenerar) {
+                panelGenerar.style.display = 'block';
+                panelGenerar.style.border = 'none';
+                panelGenerar.style.padding = '0';
+                panelGenerar.style.background = 'transparent';
+                panelGenerar.style.boxShadow = 'none';
+                panelGenerar.innerHTML = `
+                    <div style="position: relative; overflow: hidden; border-radius: 28px; background: radial-gradient(circle at 50% 15%, rgba(16, 185, 129, 0.22) 0%, rgba(15, 23, 42, 0.95) 75%), linear-gradient(135deg, rgba(30, 41, 59, 0.6) 0%, rgba(4, 13, 33, 0.9) 100%); border: 1px solid rgba(255, 255, 255, 0.12); border-top: 1px solid rgba(16, 185, 129, 0.5); box-shadow: 0 30px 60px -15px rgba(0, 0, 0, 0.8), 0 0 50px rgba(16, 185, 129, 0.15); padding: 65px 30px; text-align: center; backdrop-filter: blur(25px);">
+                        
+                        <!-- Elementos de fondo decorativos (Luces y Cancha) -->
+                        <div style="position: absolute; top: -60px; left: 50%; transform: translateX(-50%); width: 350px; height: 350px; background: radial-gradient(circle, rgba(16, 185, 129, 0.3) 0%, transparent 70%); pointer-events: none; filter: blur(30px); border-radius: 50%;"></div>
+                        <div style="position: absolute; bottom: -80px; left: -80px; width: 260px; height: 260px; background: radial-gradient(circle, rgba(59, 130, 246, 0.2) 0%, transparent 70%); pointer-events: none; filter: blur(40px);"></div>
+                        <div style="position: absolute; top: 30px; right: 40px; opacity: 0.15; font-size: 7rem; color: #10b981; pointer-events: none; transform: rotate(15deg);"><i class="fa-solid fa-futbol"></i></div>
+                        <div style="position: absolute; bottom: 20px; left: 30px; opacity: 0.1; font-size: 6rem; color: #3b82f6; pointer-events: none; transform: rotate(-10deg);"><i class="fa-solid fa-trophy"></i></div>
+
+                        <div style="position: relative; z-index: 2; max-width: 600px; margin: 0 auto;">
+                            <!-- Icono central 3D flotante con animación neón -->
+                            <div style="position: relative; width: 110px; height: 110px; margin: 0 auto 28px auto;">
+                                <div style="position: absolute; inset: -8px; border-radius: 35px; background: linear-gradient(135deg, #10b981, #3b82f6); opacity: 0.5; filter: blur(14px); animation: pulse 3s infinite;"></div>
+                                <div style="position: relative; width: 100%; height: 100%; border-radius: 30px; background: linear-gradient(145deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.9)); border: 2px solid rgba(255, 255, 255, 0.2); display: flex; align-items: center; justify-content: center; box-shadow: 0 15px 35px rgba(0,0,0,0.5);">
+                                    <i class="fa-solid fa-calendar-plus" style="font-size: 3.2rem; background: linear-gradient(135deg, #34d399, #60a5fa); -webkit-background-clip: text; -webkit-text-fill-color: transparent;"></i>
+                                </div>
+                            </div>
+
+                            <!-- Badges de características -->
+                            <div style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 18px;">
+                                <span style="display: inline-flex; align-items: center; gap: 6px; padding: 5px 14px; border-radius: 20px; font-size: 0.78rem; font-weight: 700; background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.35); text-transform: uppercase; letter-spacing: 0.5px;">
+                                    <i class="fa-solid fa-wand-magic-sparkles"></i> Asistente de Sorteos
+                                </span>
+                                <span style="display: inline-flex; align-items: center; gap: 6px; padding: 5px 14px; border-radius: 20px; font-size: 0.78rem; font-weight: 700; background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.35); text-transform: uppercase; letter-spacing: 0.5px;">
+                                    <i class="fa-solid fa-clock"></i> Horarios Automáticos
+                                </span>
+                            </div>
+
+                            <!-- Título principal llamativo -->
+                            <h2 style="font-size: 2.2rem; font-weight: 900; color: #f8fafc; margin-bottom: 14px; font-family: var(--font-display); letter-spacing: -0.5px; line-height: 1.2;">
+                                ¡No tienes ningún calendario creado!
+                            </h2>
+                            <p style="color: #94a3b8; font-size: 1.05rem; line-height: 1.65; margin-bottom: 34px;">
+                                Dale vida al campeonato configurando tu primer calendario oficial. Podrás armar <strong>Liga todos contra todos</strong> o <strong>Llaves de Eliminación</strong>, asignar los equipos en disputa y fijar horarios automáticamente.
+                            </p>
+
+                            <!-- Botón Principal Épico -->
+                            <button type="button" onclick="window.openModalNuevoCalendario()" class="btn-primary" style="padding: 16px 42px; font-size: 1.15rem; font-weight: 800; border-radius: 16px; margin: 0 auto; display: inline-flex; align-items: center; gap: 12px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); box-shadow: 0 12px 35px rgba(16, 185, 129, 0.5), inset 0 1px 0 rgba(255,255,255,0.3); border: none; color: white; cursor: pointer; transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);">
+                                <i class="fa-solid fa-plus-circle" style="font-size: 1.35rem;"></i> Crear Mi Primer Calendario
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
         } else {
-            if(panelGenerar) panelGenerar.style.display = 'block';
-            if(panelFase) panelFase.style.display = 'none';
-            // Renderizar dinámicamente los equipos disponibles
-            renderEquiposSelector();
+            // Sí existen calendarios: Mostrar cabecera y resultados
+            if (calHeader) calHeader.style.display = 'flex';
+            if (resultadosSection) resultadosSection.style.display = 'block';
+
+            if (matchesInCurrent.length > 0 || isManual) {
+                if (panelGenerar) panelGenerar.style.display = 'none';
+                if (panelFase) panelFase.style.display = 'none';
+                renderPartidosGenerados();
+            } else {
+                // Hay calendario seleccionado pero sin partidos generados todavía
+                if (panelGenerar) {
+                    panelGenerar.style.display = 'block';
+                    panelGenerar.style.border = '1px dashed rgba(255,255,255,0.12)';
+                    panelGenerar.style.padding = '25px';
+                    panelGenerar.style.background = 'linear-gradient(145deg, rgba(30, 41, 59, 0.4) 0%, rgba(15, 23, 42, 0.6) 100%)';
+                    panelGenerar.style.boxShadow = '0 15px 35px rgba(0,0,0,0.3)';
+                    panelGenerar.innerHTML = `
+                        <div style="text-align: center; padding: 42px 24px; max-width: 580px; margin: 0 auto;">
+                            <div style="width: 86px; height: 86px; border-radius: 24px; background: linear-gradient(135deg, rgba(59, 130, 246, 0.25) 0%, rgba(139, 92, 246, 0.2) 100%); border: 1px solid rgba(59, 130, 246, 0.4); display: flex; align-items: center; justify-content: center; margin: 0 auto 20px auto; box-shadow: 0 0 35px rgba(59, 130, 246, 0.3);">
+                                <i class="fa-solid fa-shuffle" style="font-size: 2.3rem; color: #60a5fa;"></i>
+                            </div>
+                            <span style="display: inline-block; padding: 3px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); text-transform: uppercase; margin-bottom: 10px;">Calendario sin Partidos</span>
+                            <h4 style="font-size: 1.55rem; font-weight: 800; color: #f8fafc; margin-bottom: 10px; font-family: var(--font-display);">
+                                ${window.currentCalendarioNombre}
+                            </h4>
+                            <p style="color: #94a3b8; font-size: 0.96rem; line-height: 1.6; margin-bottom: 26px;">
+                                Este calendario está preparado pero aún no tiene partidos asignados. Configura los cruces y fechas con el generador inteligente o agrégalos manualmente.
+                            </p>
+                            <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
+                                <button type="button" onclick="window.openModalNuevoCalendario()" class="btn-primary" style="padding: 13px 26px; font-size: 0.95rem; font-weight: 700; border-radius: 12px; cursor: pointer; background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4); border: none; display: inline-flex; align-items: center; gap: 8px;">
+                                    <i class="fa-solid fa-bolt"></i> Configurar y Generar Partidos
+                                </button>
+                                <button type="button" onclick="window.startManualCalendar()" class="btn-secondary" style="padding: 13px 22px; font-size: 0.95rem; font-weight: 600; border-radius: 12px; cursor: pointer; border: 1px solid rgba(255,255,255,0.12); display: inline-flex; align-items: center; gap: 8px;">
+                                    <i class="fa-solid fa-hand-pointer"></i> Empezar a Mano
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }
+                if (panelFase) panelFase.style.display = 'none';
+                if (sorteoResultadosContainer) {
+                    sorteoResultadosContainer.innerHTML = `
+                        <p style="text-align:center; color: var(--text-muted); font-size: 14px; padding: 25px;">
+                            Genera los partidos de "${window.currentCalendarioNombre}" para visualizar el rol completo de juegos.
+                        </p>
+                    `;
+                }
+            }
         }
 
-        renderPartidosGenerados();
         renderTablaPosiciones();
     }
     
@@ -1917,25 +2130,201 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // Modal Crear Nuevo Calendario
+    // Modal Interactivo: Crear y Configurar Nuevo Calendario
     const modalNuevoCal = document.getElementById("modal-nuevo-calendario");
-    const formNuevoCal = document.getElementById("form-nuevo-calendario");
-    const inputNuevoCalNombre = document.getElementById("input-nuevo-calendario-nombre");
-    const btnCloseModalCal = document.getElementById("btn-close-modal-calendario");
-    const btnCancelModalCal = document.getElementById("btn-cancelar-modal-calendario");
+    const formNuevoCal = document.getElementById("form-crear-nuevo-calendario");
+    const inputNuevoCalNombre = document.getElementById("input-nuevo-cal-nombre");
+    const selectNuevoCalFase = document.getElementById("select-nuevo-cal-fase");
+    const selectNuevoCalFormato = document.getElementById("select-nuevo-cal-formato");
+    const btnCloseModalCal = document.getElementById("btn-close-nuevo-calendario");
+    const btnCancelModalCal = document.getElementById("btn-cancelar-nuevo-calendario");
+    const btnCrearCalManual = document.getElementById("btn-crear-cal-manual");
+
+    // Equipos selection state inside modal
+    let modalSelectedTeams = new Set();
+    let modalConHorarios = true;
+
+    function renderModalEquiposSelector() {
+        const grid = document.getElementById("grid-nuevo-cal-equipos");
+        const countBadge = document.getElementById("badge-nuevo-cal-equipos-count");
+        if (!grid) return;
+
+        const filterVal = (document.getElementById("input-nuevo-cal-search-teams")?.value || "").toLowerCase().trim();
+
+        if (appData.equipos.length === 0) {
+            grid.innerHTML = `<p style="grid-column: 1/-1; text-align: center; color: #94a3b8; font-size: 0.8rem; margin: 10px 0;">No hay equipos registrados en este torneo aún.</p>`;
+            if (countBadge) countBadge.textContent = "0 Seleccionados";
+            renderModalHorariosSlots();
+            return;
+        }
+
+        grid.innerHTML = appData.equipos.map(eq => {
+            const isChecked = modalSelectedTeams.has(eq.id.toString());
+            const isHidden = filterVal && !eq.nombre.toLowerCase().includes(filterVal);
+            return `
+                <div class="cal-team-item ${isChecked ? 'selected' : ''}" data-team-id="${eq.id}" style="${isHidden ? 'display: none;' : ''}">
+                    <div class="team-check-box"><i class="fa-solid fa-check"></i></div>
+                    <img src="${eq.logo || 'https://cdn-icons-png.flaticon.com/512/53/53283.png'}" alt="${eq.nombre}" onerror="this.src='https://cdn-icons-png.flaticon.com/512/53/53283.png'">
+                    <span class="team-lbl" title="${eq.nombre}">${eq.nombre}</span>
+                </div>
+            `;
+        }).join('');
+
+        if (countBadge) countBadge.textContent = `${modalSelectedTeams.size} Seleccionados`;
+
+        // Click handlers on team items
+        grid.querySelectorAll(".cal-team-item").forEach(item => {
+            item.addEventListener("click", () => {
+                const teamId = item.getAttribute("data-team-id");
+                if (modalSelectedTeams.has(teamId)) {
+                    modalSelectedTeams.delete(teamId);
+                    item.classList.remove("selected");
+                } else {
+                    modalSelectedTeams.add(teamId);
+                    item.classList.add("selected");
+                }
+                if (countBadge) countBadge.textContent = `${modalSelectedTeams.size} Seleccionados`;
+                renderModalHorariosSlots();
+                updateModalResumen();
+            });
+        });
+
+        renderModalHorariosSlots();
+        updateModalResumen();
+    }
+
+    // Calcular cuántos partidos se juegan por jornada y renderizar slots de horario
+    function renderModalHorariosSlots() {
+        const slotsContainer = document.getElementById("container-slots-horarios");
+        if (!slotsContainer) return;
+
+        const count = modalSelectedTeams.size;
+        const fase = selectNuevoCalFase?.value || 'liga';
+
+        // Partidos por fecha
+        let partidosPorFecha = 0;
+        if (fase === 'liga') {
+            const effectiveTeams = count % 2 === 0 ? count : count + 1;
+            partidosPorFecha = Math.floor(effectiveTeams / 2);
+        } else {
+            // Eliminatorias
+            partidosPorFecha = Math.max(1, Math.floor(count / 2));
+        }
+
+        if (partidosPorFecha === 0) {
+            slotsContainer.innerHTML = `<span style="grid-column: 1/-1; color: #64748b; font-size: 0.75rem; text-align: center;">Selecciona al menos 2 equipos para ver los juegos.</span>`;
+            return;
+        }
+
+        // Mantener valores previamente ingresados si existen
+        const oldValues = {};
+        slotsContainer.querySelectorAll(".input-slot-hora").forEach(input => {
+            const idx = input.getAttribute("data-game-idx");
+            oldValues[idx] = input.value;
+        });
+
+        let slotsHtml = "";
+        const baseStart = document.getElementById("input-hora-inicio-rapido")?.value || "08:00";
+        const interval = parseInt(document.getElementById("select-intervalo-rapido")?.value) || 90;
+
+        for (let i = 0; i < partidosPorFecha; i++) {
+            let suggestedHour = oldValues[i];
+            if (!suggestedHour) {
+                // Calcular hora secuencial por defecto
+                const [hStr, mStr] = baseStart.split(":");
+                let totalMin = (parseInt(hStr) * 60 + parseInt(mStr)) + (i * interval);
+                let curH = Math.floor(totalMin / 60) % 24;
+                let curM = totalMin % 60;
+                suggestedHour = `${String(curH).padStart(2, '0')}:${String(curM).padStart(2, '0')}`;
+            }
+
+            slotsHtml += `
+                <div class="slot-horario-card">
+                    <label><i class="fa-solid fa-stopwatch" style="color: #f59e0b;"></i> Juego ${i + 1}</label>
+                    <input type="time" class="input-slot-hora" data-game-idx="${i}" value="${suggestedHour}">
+                </div>
+            `;
+        }
+
+        slotsContainer.innerHTML = slotsHtml;
+    }
+
+    function updateModalResumen() {
+        const resumenEl = document.getElementById("resumen-nuevo-cal-info");
+        if (!resumenEl) return;
+
+        const count = modalSelectedTeams.size;
+        const fase = selectNuevoCalFase?.value || 'liga';
+        const formato = selectNuevoCalFormato?.value || 'ida';
+
+        if (count < 2) {
+            resumenEl.innerHTML = `<i class="fa-solid fa-circle-exclamation" style="color: #ef4444;"></i> Selecciona al menos 2 equipos para generar el calendario.`;
+            return;
+        }
+
+        if (fase === 'liga') {
+            const isPar = count % 2 === 0;
+            const effectiveTeams = isPar ? count : count + 1;
+            const jornadasBase = effectiveTeams - 1;
+            const partidosPorFecha = effectiveTeams / 2;
+            const totalJornadas = formato === 'idayvuelta' ? jornadasBase * 2 : jornadasBase;
+            const totalPartidos = totalJornadas * (isPar ? partidosPorFecha : (count - 1) / 2);
+            const horarioTxt = modalConHorarios ? ` &bull; <strong>${partidosPorFecha} horarios configurados</strong> por fecha` : ` &bull; <span style="color: #94a3b8;">Sin horarios</span>`;
+            const descansoTxt = !isPar ? ` &bull; <span style="color: #f59e0b;">1 equipo descansa por jornada</span>` : '';
+
+            resumenEl.innerHTML = `
+                <i class="fa-solid fa-calendar-check" style="color: #10b981;"></i> 
+                <strong>${count} equipos</strong> &bull; 
+                <strong>${totalJornadas} jornadas</strong> (${totalPartidos} partidos en total)${horarioTxt}${descansoTxt}.
+            `;
+        } else {
+            const llaves = Math.floor(count / 2);
+            const horarioTxt = modalConHorarios ? ` &bull; <strong>${llaves} horarios</strong>` : ` &bull; <span style="color: #94a3b8;">Sin horarios</span>`;
+            resumenEl.innerHTML = `
+                <i class="fa-solid fa-sitemap" style="color: #a855f7;"></i> 
+                <strong>${count} equipos</strong> en eliminación directa &bull; <strong>${llaves} llaves</strong> (${formato === 'idayvuelta' ? 'Ida y Vuelta' : 'Partido Único'})${horarioTxt}.
+            `;
+        }
+    }
 
     function openModalNuevoCalendario() {
         if (!modalNuevoCal) return;
+        modalNuevoCal.classList.add("active");
         modalNuevoCal.style.display = "flex";
+
         if (inputNuevoCalNombre) {
             inputNuevoCalNombre.value = "";
             inputNuevoCalNombre.focus();
         }
+
+        // Por defecto, preseleccionar todos los equipos activos
+        modalSelectedTeams = new Set(appData.equipos.map(eq => eq.id.toString()));
+        modalConHorarios = true;
+
+        // Reset visual toggles
+        document.getElementById("btn-toggle-horarios-on")?.classList.add("active");
+        document.getElementById("btn-toggle-horarios-off")?.classList.remove("active");
+        const panelSlots = document.getElementById("panel-config-horarios-slots");
+        const msgSinHorarios = document.getElementById("mensaje-sin-horarios");
+        if (panelSlots) panelSlots.style.display = "block";
+        if (msgSinHorarios) msgSinHorarios.style.display = "none";
+
+        // Filtro input reset
+        const filterInput = document.getElementById("input-nuevo-cal-search-teams");
+        if (filterInput) filterInput.value = "";
+
+        renderModalEquiposSelector();
     }
 
     function closeModalNuevoCalendario() {
-        if (modalNuevoCal) modalNuevoCal.style.display = "none";
+        if (modalNuevoCal) {
+            modalNuevoCal.classList.remove("active");
+            modalNuevoCal.style.display = "none";
+        }
     }
+
+    window.openModalNuevoCalendario = openModalNuevoCalendario;
+    window.closeModalNuevoCalendario = closeModalNuevoCalendario;
 
     window.startManualCalendar = function() {
         window.manualCalendars = window.manualCalendars || [];
@@ -1971,8 +2360,27 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // Sugerencias de nombres para nuevo calendario
-    document.querySelectorAll(".btn-cal-sugerencia").forEach(btn => {
+    // Crear en blanco manual desde el modal
+    if (btnCrearCalManual) {
+        btnCrearCalManual.addEventListener("click", () => {
+            const nombre = inputNuevoCalNombre?.value?.trim() || `Calendario ${window.calendariosDisponibles.length + 1}`;
+            if (!window.calendariosDisponibles.includes(nombre)) {
+                window.calendariosDisponibles.push(nombre);
+            }
+            window.currentCalendarioNombre = nombre;
+            window.currentJornadaTab = null;
+            window.manualCalendars = window.manualCalendars || [];
+            if (!window.manualCalendars.includes(nombre)) {
+                window.manualCalendars.push(nombre);
+            }
+            localStorage.setItem(`femfutpal_selected_cal_${activeId}`, window.currentCalendarioNombre);
+            closeModalNuevoCalendario();
+            updateCalendarioUI();
+        });
+    }
+
+    // Sugerencias de nombres en pills
+    document.querySelectorAll(".btn-sug-cal-chip").forEach(btn => {
         btn.addEventListener("click", () => {
             const name = btn.getAttribute("data-name");
             if (inputNuevoCalNombre && name) {
@@ -1982,32 +2390,285 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     });
 
+    // Filtro de búsqueda en modal
+    document.getElementById("input-nuevo-cal-search-teams")?.addEventListener("input", () => {
+        renderModalEquiposSelector();
+    });
+
+    // Marcar / Desmarcar todos en modal
+    document.getElementById("btn-nuevo-cal-sel-todos")?.addEventListener("click", () => {
+        modalSelectedTeams = new Set(appData.equipos.map(eq => eq.id.toString()));
+        renderModalEquiposSelector();
+    });
+
+    document.getElementById("btn-nuevo-cal-des-todos")?.addEventListener("click", () => {
+        modalSelectedTeams.clear();
+        renderModalEquiposSelector();
+    });
+
+    // Toggle Horarios vs Sin Horarios
+    const btnToggleHorariosOn = document.getElementById("btn-toggle-horarios-on");
+    const btnToggleHorariosOff = document.getElementById("btn-toggle-horarios-off");
+    const panelConfigSlots = document.getElementById("panel-config-horarios-slots");
+    const msgSinHorarios = document.getElementById("mensaje-sin-horarios");
+
+    if (btnToggleHorariosOn && btnToggleHorariosOff) {
+        btnToggleHorariosOn.addEventListener("click", () => {
+            modalConHorarios = true;
+            btnToggleHorariosOn.classList.add("active");
+            btnToggleHorariosOff.classList.remove("active");
+            if (panelConfigSlots) panelConfigSlots.style.display = "block";
+            if (msgSinHorarios) msgSinHorarios.style.display = "none";
+            updateModalResumen();
+        });
+
+        btnToggleHorariosOff.addEventListener("click", () => {
+            modalConHorarios = false;
+            btnToggleHorariosOff.classList.add("active");
+            btnToggleHorariosOn.classList.remove("active");
+            if (panelConfigSlots) panelConfigSlots.style.display = "none";
+            if (msgSinHorarios) msgSinHorarios.style.display = "block";
+            updateModalResumen();
+        });
+    }
+
+    // Botón aplicar llenado rápido de horarios secuenciales
+    document.getElementById("btn-aplicar-horario-secuencial")?.addEventListener("click", () => {
+        const baseStart = document.getElementById("input-hora-inicio-rapido")?.value || "08:00";
+        const interval = parseInt(document.getElementById("select-intervalo-rapido")?.value) || 90;
+        const [hStr, mStr] = baseStart.split(":");
+        const startMinutes = parseInt(hStr) * 60 + parseInt(mStr);
+
+        const slotInputs = document.querySelectorAll("#container-slots-horarios .input-slot-hora");
+        slotInputs.forEach((input, idx) => {
+            const totalMin = startMinutes + (idx * interval);
+            const curH = Math.floor(totalMin / 60) % 24;
+            const curM = totalMin % 60;
+            input.value = `${String(curH).padStart(2, '0')}:${String(curM).padStart(2, '0')}`;
+        });
+    });
+
+    // Re-render slots when fase or formato changes
+    if (selectNuevoCalFase) {
+        selectNuevoCalFase.addEventListener("change", () => {
+            renderModalHorariosSlots();
+            updateModalResumen();
+        });
+    }
+    if (selectNuevoCalFormato) {
+        selectNuevoCalFormato.addEventListener("change", () => {
+            updateModalResumen();
+        });
+    }
+
+    // Submit del Formulario del Modal Interactivo
     if (formNuevoCal) {
-        formNuevoCal.addEventListener("submit", (e) => {
+        formNuevoCal.addEventListener("submit", async (e) => {
             e.preventDefault();
             const nombre = inputNuevoCalNombre?.value?.trim();
-            if (!nombre) return alert("Por favor escribe un nombre para el calendario.");
+            if (!nombre) return alert("Por favor escribe un nombre para el nuevo calendario.");
 
+            if (modalSelectedTeams.size < 2) {
+                return alert("Debes seleccionar al menos 2 equipos participantes.");
+            }
+
+            // Recoger horarios configurados por juego si "Con Horarios" está activo
+            const matchSchedules = [];
+            if (modalConHorarios) {
+                document.querySelectorAll("#container-slots-horarios .input-slot-hora").forEach(inp => {
+                    matchSchedules.push(inp.value || null);
+                });
+            }
+
+            const fase = selectNuevoCalFase?.value || 'liga';
+            const formato = selectNuevoCalFormato?.value || 'ida';
+
+            // Agregar calendario si es nuevo
             if (!window.calendariosDisponibles.includes(nombre)) {
                 window.calendariosDisponibles.push(nombre);
             }
             window.currentCalendarioNombre = nombre;
             window.currentJornadaTab = null;
-            // Pre-seleccionar todos los equipos para el nuevo calendario
-            window.selectedEquiposSorteo = new Set(appData.equipos.map(eq => eq.id.toString()));
             localStorage.setItem(`femfutpal_selected_cal_${activeId}`, window.currentCalendarioNombre);
+
+            // Generar partidos
+            showLoader(`Generando calendario "${nombre}"...`);
+
+            let equiposActivos = appData.equipos.filter(eq => modalSelectedTeams.has(eq.id.toString())).sort(() => Math.random() - 0.5);
+            let idCounter = Date.now();
+
+            if (fase === 'liga') {
+                let equiposLiga = [...equiposActivos];
+                if (equiposLiga.length % 2 !== 0) {
+                    equiposLiga.push({ id: 'vacante', nombre: 'VACANTE (Descansa)', logo: '' });
+                }
+
+                const numEquipos = equiposLiga.length;
+                const jornadas = numEquipos - 1;
+                const partidosPorJornada = numEquipos / 2;
+
+                for (let r = 0; r < jornadas; r++) {
+                    for (let i = 0; i < partidosPorJornada; i++) {
+                        const local = equiposLiga[i];
+                        const visitante = equiposLiga[numEquipos - 1 - i];
+
+                        // Obtener hora asignada a este juego si aplica
+                        const assignedHora = (modalConHorarios && matchSchedules[i]) ? matchSchedules[i] : null;
+
+                        const partidoObj = {
+                            id: (idCounter++).toString(),
+                            torneo: currentTorneo,
+                            calendario_nombre: window.currentCalendarioNombre,
+                            fase: 'liga',
+                            jornada: r + 1,
+                            equipo1Id: local.id,
+                            equipo2Id: visitante.id,
+                            goles1: null,
+                            goles2: null,
+                            grupo: 'unico',
+                            detalles: {
+                                estado: 'pendiente'
+                            }
+                        };
+
+                        if (assignedHora) {
+                            partidoObj.detalles.hora = assignedHora;
+                            partidoObj.detalles.horaText = assignedHora;
+                        }
+
+                        appData.partidos.push(partidoObj);
+
+                        if (formato === 'idayvuelta') {
+                            const partidoVuelta = {
+                                id: (idCounter++).toString(),
+                                torneo: currentTorneo,
+                                calendario_nombre: window.currentCalendarioNombre,
+                                fase: 'liga',
+                                jornada: r + 1 + jornadas,
+                                equipo1Id: visitante.id,
+                                equipo2Id: local.id,
+                                goles1: null,
+                                goles2: null,
+                                grupo: 'unico',
+                                detalles: {
+                                    estado: 'pendiente'
+                                }
+                            };
+
+                            if (assignedHora) {
+                                partidoVuelta.detalles.hora = assignedHora;
+                                partidoVuelta.detalles.horaText = assignedHora;
+                            }
+
+                            appData.partidos.push(partidoVuelta);
+                        }
+                    }
+                    equiposLiga.splice(1, 0, equiposLiga.pop());
+                }
+            } else if (fase.startsWith('eliminatorias')) {
+                // Eliminatorias
+                let clasificados = [...equiposActivos];
+                if (fase === 'eliminatorias_clasificacion') {
+                    const tabla = getTablaDePosicionesArray().filter(t => modalSelectedTeams.has(t.equipo.id.toString()));
+                    if (tabla.length >= 2) {
+                        clasificados = tabla.map(t => t.equipo);
+                    }
+                }
+
+                let llaveCount = 1;
+                const totalMatches = Math.floor(clasificados.length / 2);
+
+                for (let i = 0; i < totalMatches; i++) {
+                    const local = clasificados[i];
+                    const visitante = clasificados[clasificados.length - 1 - i];
+                    const assignedHora = (modalConHorarios && matchSchedules[i]) ? matchSchedules[i] : null;
+
+                    const pIda = {
+                        id: (idCounter++).toString(),
+                        torneo: currentTorneo,
+                        calendario_nombre: window.currentCalendarioNombre,
+                        fase: 'eliminatoria',
+                        jornada: 1,
+                        equipo1Id: local.id,
+                        equipo2Id: visitante.id,
+                        goles1: null,
+                        goles2: null,
+                        grupo: `Llave ${llaveCount}`,
+                        detalles: { estado: 'pendiente' }
+                    };
+
+                    if (assignedHora) {
+                        pIda.detalles.hora = assignedHora;
+                        pIda.detalles.horaText = assignedHora;
+                    }
+                    appData.partidos.push(pIda);
+
+                    if (formato === 'idayvuelta') {
+                        const pVuelta = {
+                            id: (idCounter++).toString(),
+                            torneo: currentTorneo,
+                            calendario_nombre: window.currentCalendarioNombre,
+                            fase: 'eliminatoria',
+                            jornada: 2,
+                            equipo1Id: visitante.id,
+                            equipo2Id: local.id,
+                            goles1: null,
+                            goles2: null,
+                            grupo: `Llave ${llaveCount}`,
+                            detalles: { estado: 'pendiente' }
+                        };
+                        if (assignedHora) {
+                            pVuelta.detalles.hora = assignedHora;
+                            pVuelta.detalles.horaText = assignedHora;
+                        }
+                        appData.partidos.push(pVuelta);
+                    }
+                    llaveCount++;
+                }
+            }
+
+            hideLoader();
+            await savePartidosToSupabase();
             closeModalNuevoCalendario();
             updateCalendarioUI();
+
+            setTimeout(() => {
+                const resultsSection = document.getElementById("sorteo-resultados-section");
+                if (resultsSection) resultsSection.scrollIntoView({ behavior: 'smooth' });
+            }, 150);
         });
     }
 
-    // Eliminar Calendario (Sin bloqueos, seguro y fluido)
+    // Eliminar Calendario (Sin bloqueos, seguro y fluido con SweetAlert2)
     const btnEliminarCalendario = document.getElementById("btn-eliminar-calendario");
     if (btnEliminarCalendario) {
         btnEliminarCalendario.addEventListener("click", async () => {
             const calToDelete = window.currentCalendarioNombre;
-            if (!confirm(`¿Estás seguro de eliminar el calendario "${calToDelete}" y todos sus partidos asociados?`)) {
-                return;
+
+            if (typeof Swal !== 'undefined') {
+                const res = await Swal.fire({
+                    title: '¿Eliminar Calendario?',
+                    text: `¿Estás seguro de eliminar el calendario "${calToDelete}" y todos sus partidos asociados?`,
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#ef4444',
+                    cancelButtonColor: '#334155',
+                    confirmButtonText: '<i class="fa-solid fa-trash"></i> Sí, eliminar',
+                    cancelButtonText: 'Cancelar',
+                    customClass: {
+                        popup: 'modern-dark-popup',
+                        confirmButton: 'modern-swal-btn',
+                        cancelButton: 'modern-swal-cancel-btn'
+                    },
+                    background: '#0f172a',
+                    color: '#f8fafc'
+                });
+
+                if (!res.isConfirmed) return;
+            } else {
+                if (!confirm(`¿Estás seguro de eliminar el calendario "${calToDelete}" y todos sus partidos asociados?`)) {
+                    return;
+                }
             }
 
             showLoader("Eliminando calendario...");
@@ -2041,6 +2702,10 @@ document.addEventListener("DOMContentLoaded", async () => {
             await savePartidosToSupabase();
             updateCalendarioUI();
             hideLoader();
+
+            if (typeof window.showToast === 'function') {
+                window.showToast(`Calendario "${calToDelete}" eliminado con éxito`, 'success');
+            }
         });
     }
 
@@ -3198,23 +3863,54 @@ document.addEventListener("DOMContentLoaded", async () => {
     async function handleBaja(playerId) {
         const player = appData.jugadores.find(p => p.id == playerId);
         if (!player) return;
-        if (confirm(`¿Seguro que deseas dar de baja a ${player.name}?`)) {
-            player.status = 'baja';
-            appData.movimientos.push({
-                id: Date.now(),
-                fecha: new Date().toISOString(),
-                jugadorId: playerId,
-                tipo: 'baja',
-                equipoOrigenId: player.equipoId
+
+        const playerName = player.name || player.nombre || 'este jugador';
+
+        if (typeof Swal !== 'undefined') {
+            const result = await Swal.fire({
+                title: '¿Dar de baja al jugador?',
+                text: `¿Estás seguro de que deseas dar de baja a "${playerName}"?`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#334155',
+                confirmButtonText: '<i class="fa-solid fa-user-minus"></i> Sí, dar de baja',
+                cancelButtonText: 'Cancelar',
+                customClass: {
+                    popup: 'modern-dark-popup',
+                    confirmButton: 'modern-swal-btn',
+                    cancelButton: 'modern-swal-cancel-btn'
+                },
+                background: '#0f172a',
+                color: '#f8fafc'
             });
-            showLoader("Dando de baja al jugador...");
-            await saveData();
-            hideLoader();
-            updateSelects();
-            alert("Jugador dado de baja.");
-            if (currentTeamId) showTeamDetail(appData.equipos.find(t => t.id == currentTeamId));
-            if (document.getElementById("view-mercado").classList.contains("active")) renderMercado();
+
+            if (!result.isConfirmed) return;
+        } else {
+            if (!confirm(`¿Seguro que deseas dar de baja a ${playerName}?`)) return;
         }
+
+        player.status = 'baja';
+        appData.movimientos.push({
+            id: Date.now(),
+            fecha: new Date().toISOString(),
+            jugadorId: playerId,
+            tipo: 'baja',
+            equipoOrigenId: player.equipoId
+        });
+        showLoader("Dando de baja al jugador...");
+        await saveData();
+        hideLoader();
+        updateSelects();
+
+        if (typeof window.showToast === 'function') {
+            window.showToast(`${playerName} ha sido dado de baja`, 'success');
+        } else {
+            alert("Jugador dado de baja.");
+        }
+
+        if (currentTeamId) showTeamDetail(appData.equipos.find(t => t.id == currentTeamId));
+        if (document.getElementById("view-mercado").classList.contains("active")) renderMercado();
     }
 
 

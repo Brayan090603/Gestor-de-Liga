@@ -97,6 +97,26 @@
             transform: translateY(-2px);
         }
 
+        @media (max-width: 640px) {
+            body {
+                padding: 15px;
+                align-items: flex-start;
+            }
+            .container {
+                padding: 22px 18px;
+                border-radius: 14px;
+            }
+            h1 {
+                font-size: 22px;
+                margin-bottom: 20px;
+            }
+            .form-group input,
+            .form-group select {
+                padding: 10px 12px;
+                font-size: 15px;
+            }
+        }
+
         /* --- PRINT STYLES --- */
         #print-area {
             display: none;

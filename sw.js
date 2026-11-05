@@ -1,4 +1,4 @@
-const CACHE_NAME = 'femfutpal-cache-v3';
+const CACHE_NAME = 'femfutpal-cache-v9';
 const urlsToCache = [
   './',
   './index.html',
