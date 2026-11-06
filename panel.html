@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/style.css?v=17">
+    <link rel="stylesheet" href="css/style.css?v=26">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="manifest" href="manifest.json">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
@@ -21,13 +21,17 @@
         <!-- Sidebar -->
         <aside class="sidebar" id="sidebar">
             <div class="logo-container">
+                <div class="sidebar-brand-box">
+                    <img id="liga-logo-img" src="" style="display:none; width:44px; height:44px; border-radius:12px; object-fit:cover; border:2px solid rgba(132, 204, 22, 0.4); box-shadow:0 0 12px rgba(132, 204, 22, 0.25);">
+                    <i id="liga-logo-icon" class="fa-solid fa-futbol logo-icon" style="font-size:32px; color:#84cc16;"></i>
+                    <div class="sidebar-brand-text">
+                        <h1 id="liga-name-title">FEMFUTPAL</h1>
+                        <p id="liga-lugar-subtitle" class="subtitle">PALACAGÜINA</p>
+                    </div>
+                </div>
                 <button class="mobile-close-sidebar-btn" id="mobile-close-sidebar" aria-label="Cerrar menú">
                     <i class="fa-solid fa-xmark"></i>
                 </button>
-                <i id="liga-logo-icon" class="fa-solid fa-futbol logo-icon"></i>
-                <img id="liga-logo-img" src="" style="display:none; width:80px; height:80px; border-radius:50%; margin-bottom:10px; object-fit:cover; border:2px solid var(--accent-primary); box-shadow: var(--shadow-neon);">
-                <h1 id="liga-name-title">FEMFUTPAL</h1>
-                <p id="liga-lugar-subtitle" class="subtitle">LIGA PALACAGÜINA</p>
             </div>
             
             <nav class="main-nav">
@@ -115,7 +119,7 @@
                         <i class="fa-solid fa-bars"></i>
                     </button>
                     <div class="header-title">
-                        <h2 id="current-tab-title">Equipos de la Liga</h2>
+                        <h2 id="current-tab-title">Resumen del Campeonato</h2>
                         <p class="date-text">Temporada <span id="season-label">2026</span></p>
                     </div>
                 </div>
@@ -129,7 +133,18 @@
                             <p><i class="fa-solid fa-phone"></i> <span id="liga-celular-text"></span></p>
                         </div>
 
-                        <div class="tournament-selector" style="display: flex; background-color: rgba(0,0,0,0.2); border-radius: var(--radius-full); padding: 4px; border: 1px solid var(--border-color);">
+                        <!-- Selector de Año de Temporada (Estilo Píldora Elegante) -->
+                        <div class="season-pill-selector-wrap" id="season-pill-selector-wrap">
+                            <span class="season-dot-indicator"></span>
+                            <span class="season-pill-label">TEMPORADA:</span>
+                            <select id="select-active-season" class="season-native-select">
+                                <!-- Poblado dinámicamente con la temporada exacta del torneo -->
+                            </select>
+                            <i class="fa-solid fa-chevron-down season-chevron"></i>
+                        </div>
+
+                        <!-- Selector Apertura / Clausura del Año Activo -->
+                        <div class="tournament-selector" id="header-tournament-selector" style="display: flex; background-color: rgba(0,0,0,0.3); border-radius: var(--radius-full); padding: 4px; border: 1px solid var(--border-color);">
                             <button class="tournament-btn active" data-torneo="apertura">Apertura</button>
                             <button class="tournament-btn" data-torneo="clausura">Clausura</button>
                         </div>
@@ -560,10 +575,18 @@
                 <!-- VIEW: TABLA POSICIONES -->
                 <div id="view-posiciones" class="view-section">
                     <section class="table-section" style="margin-top: 0;">
-                        <div class="table-header">
+                        <div class="table-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
                             <h3><i class="fa-solid fa-list-ol"></i> Tabla de Posiciones Generales</h3>
+                            <div class="posiciones-actions-bar" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                                <button type="button" class="btn-secondary" id="btn-open-posiciones-config" style="background:rgba(255,255,255,0.08); font-size:13px; padding:7px 14px; border-radius:8px; display:inline-flex; align-items:center; gap:8px; border:1px solid rgba(255,255,255,0.15); color:#fff; cursor:pointer;">
+                                    <i class="fa-solid fa-palette" style="color:var(--accent-primary);"></i> Resaltar Posiciones
+                                </button>
+                                <button type="button" class="btn-primary" id="btn-descargar-tabla-img" style="background:#10b981; font-size:13px; padding:7px 14px; border-radius:8px; display:inline-flex; align-items:center; gap:6px;">
+                                    <i class="fa-solid fa-download"></i> Descargar Imagen
+                                </button>
+                            </div>
                         </div>
-                        <div class="table-container">
+                        <div class="table-container" id="posiciones-export-wrapper">
                             <div id="posiciones-container" style="padding: 20px; display: flex; flex-direction: column; gap: 30px;">
                                 <p style="text-align:center; color: var(--text-muted); font-size: 14px;">Genera un calendario de Liga o Grupos y anota resultados para ver la tabla.</p>
                             </div>
@@ -669,7 +692,42 @@
                     <button class="admin-tab active" data-target="admin-equipo">Equipo</button>
                     <button class="admin-tab" data-target="admin-estadistica">Estadísticas</button>
                     <button class="admin-tab" data-target="admin-mercado">Mercado</button>
+                    <button class="admin-tab" data-target="admin-temporadas">Temporadas</button>
                     <button class="admin-tab" data-target="admin-liga">Datos de la Liga</button>
+                </div>
+
+                <!-- Gestión de Temporadas -->
+                <div id="admin-temporadas" class="admin-section-content">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:1px solid rgba(255,255,255,0.08); padding-bottom:10px;">
+                        <h3 style="margin:0;"><i class="fa-solid fa-calendar-plus" style="color:var(--accent-primary);"></i> Gestión de Temporadas</h3>
+                    </div>
+                    
+                    <!-- Formulario Crear Temporada / Año -->
+                    <form id="form-create-temporada" style="background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:16px; margin-bottom:20px;">
+                        <h4 style="margin:0 0 10px 0; font-size:14px; color:#fff; display:flex; align-items:center; gap:6px;">
+                            <i class="fa-solid fa-plus-circle" style="color:#10b981;"></i> Crear Nueva Temporada Anual
+                        </h4>
+                        <p style="margin:0 0 14px 0; font-size:12px; color:var(--text-muted);">
+                            Cada temporada representa un año completo (ej. Temporada 2026, 2027) y cuenta con su torneo Apertura y Clausura independientes.
+                        </p>
+                        <div style="display:flex; gap:10px; align-items:flex-end;">
+                            <div class="form-group" style="margin-bottom:0; flex:1;">
+                                <label style="font-size:12px;">Año de la Temporada</label>
+                                <input type="number" id="new-season-year" class="dash-input" min="2020" max="2050" value="2027" required style="height:40px;">
+                            </div>
+                            <button type="submit" class="btn-primary" style="height:40px; padding:0 20px; font-size:13px; font-weight:700; white-space:nowrap;">
+                                <i class="fa-solid fa-save"></i> Guardar Temporada
+                            </button>
+                        </div>
+                    </form>
+
+                    <!-- Lista de Temporadas Creadas -->
+                    <h4 style="margin:0 0 10px 0; font-size:13px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px;">
+                        Temporadas Registradas
+                    </h4>
+                    <div id="admin-temporadas-list" style="display:flex; flex-direction:column; gap:8px; max-height:240px; overflow-y:auto; padding-right:4px;">
+                        <!-- Inyectado por JS -->
+                    </div>
                 </div>
 
                 <!-- Datos de la Liga -->
@@ -1187,38 +1245,92 @@
 
             <!-- Tabs -->
             <div class="dashboard-tabs">
-                <button class="dash-tab active" data-tab="general">Vista general</button>
-                <button class="dash-tab" data-tab="alineacion">Alineación</button>
-                <button class="dash-tab" data-tab="feed">Feed</button>
+                <button class="dash-tab active" data-tab="general"><i class="fa-solid fa-gamepad"></i> En Vivo</button>
+                <button class="dash-tab" data-tab="informacion"><i class="fa-regular fa-calendar-check"></i> Información</button>
+                <button class="dash-tab" data-tab="alineacion"><i class="fa-solid fa-users"></i> Alineación</button>
+                <button class="dash-tab" data-tab="feed"><i class="fa-solid fa-timeline"></i> Feed</button>
             </div>
 
-            <!-- Tab Content: General -->
+            <!-- Tab Content: En Vivo / General -->
             <div class="dash-tab-content active" id="tab-general">
-                <div class="match-info-card">
-                    <h4><i class="fa-regular fa-calendar"></i> Programación</h4>
-                    <div class="info-row">
-                        <label>Fecha y Hora:</label>
-                        <input type="datetime-local" id="match-datetime-input" class="dash-input">
+                <!-- Info resumen rápido del partido -->
+                <div class="live-match-meta-banner" id="live-match-meta-banner" style="background:rgba(15,23,42,0.6); padding:10px 14px; border-radius:10px; border:1px solid rgba(255,255,255,0.08); margin-bottom:15px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                    <div>
+                        <span id="live-banner-titulo" style="font-weight:700; color:#fff; font-size:0.95rem; display:block;">Partido Oficial</span>
+                        <span id="live-banner-sub" style="font-size:0.8rem; color:var(--text-muted);"><i class="fa-regular fa-clock"></i> <span id="live-banner-horario">Horario por definir</span> &bull; <i class="fa-solid fa-stopwatch"></i> <span id="live-banner-duracion">2T x 45m</span></span>
                     </div>
-                    <div class="info-row">
-                        <label>Lugar/Cancha:</label>
-                        <input type="text" id="match-location-input" class="dash-input" placeholder="Ej. Cancha Principal">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span id="match-period-badge" class="badge-status" style="background:rgba(59,130,246,0.2); color:#60a5fa; border:1px solid rgba(59,130,246,0.4); font-size:0.75rem; padding:3px 8px; border-radius:12px;">1º Tiempo</span>
                     </div>
-                    <button class="btn-save-info" id="btn-save-match-info">Guardar Programación</button>
                 </div>
 
                 <div class="quick-actions-panel">
-                    <h4>Acciones Rápidas</h4>
+                    <h4><i class="fa-solid fa-bolt"></i> Registro de Eventos en Vivo</h4>
                     <div class="actions-grid">
-                        <button class="action-btn gol" id="btn-action-gol"><i class="fa-solid fa-trophy"></i><span>Gol</span></button>
-                        <button class="action-btn amarilla" id="btn-action-amarilla"><i class="fa-solid fa-square" style="color:var(--card-yellow);"></i><span>Amarilla</span></button>
-                        <button class="action-btn roja" id="btn-action-roja"><i class="fa-solid fa-square" style="color:var(--card-red);"></i><span>Roja</span></button>
+                        <button class="action-btn gol" id="btn-action-gol"><i class="fa-solid fa-futbol"></i><span>Gol</span></button>
+                        <button class="action-btn amarilla" id="btn-action-amarilla"><i class="fa-solid fa-square" style="color:#facc15;"></i><span>Amarilla</span></button>
+                        <button class="action-btn roja" id="btn-action-roja"><i class="fa-solid fa-square" style="color:#ef4444;"></i><span>Roja</span></button>
                         <button class="action-btn cambio" id="btn-action-cambio"><i class="fa-solid fa-right-left"></i><span>Cambio</span></button>
-                        <button class="action-btn minutos" id="btn-action-minutos"><i class="fa-regular fa-clock"></i><span>Minutos</span></button>
+                        <button class="action-btn minutos" id="btn-action-minutos"><i class="fa-regular fa-clock"></i><span>Minutos/Stats</span></button>
                     </div>
-                    <button class="btn-start-match" id="btn-start-match">INICIAR PARTIDO</button>
-                    <button class="btn-end-match" id="btn-end-match" style="display:none;">FINALIZAR PARTIDO OFICIALMENTE</button>
-                    <button class="btn-forfeit" id="btn-forfeit-match">FORFEIT (W.O. 3-0)</button>
+
+                    <div style="display:flex; flex-direction:column; gap:10px; margin-top:15px;">
+                        <!-- Controles de Tiempos del Partido -->
+                        <button class="btn-start-match" id="btn-start-match"><i class="fa-solid fa-play"></i> INICIAR PRIMER TIEMPO</button>
+                        <button class="btn-primary" id="btn-end-first-half" style="display:none; background:#f59e0b; color:#0f172a; font-weight:700; padding:12px; border-radius:10px; border:none; cursor:pointer;"><i class="fa-solid fa-pause"></i> FINALIZAR 1º TIEMPO (ENTRETIEMPO)</button>
+                        <button class="btn-start-match" id="btn-start-second-half" style="display:none; background:#10b981;"><i class="fa-solid fa-play"></i> INICIAR SEGUNDO TIEMPO</button>
+                        <button class="btn-end-match" id="btn-end-match" style="display:none;"><i class="fa-solid fa-flag-checkered"></i> FINALIZAR PARTIDO OFICIAL</button>
+                        
+                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                            <button class="btn-forfeit" id="btn-forfeit-match"><i class="fa-solid fa-user-xmark"></i> Declarar W.O. (3-0)</button>
+                            <button class="btn-suspend" id="btn-suspend-match"><i class="fa-solid fa-pause"></i> Suspender Partido</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Información y Horarios -->
+            <div class="dash-tab-content" id="tab-informacion">
+                <div class="match-info-card">
+                    <h4><i class="fa-solid fa-circle-info"></i> Información y Horario del Partido</h4>
+                    
+                    <div class="info-row">
+                        <label><i class="fa-solid fa-heading"></i> Título / Nombre del Partido:</label>
+                        <input type="text" id="match-titulo-input" class="dash-input" placeholder="Ej. Clásico Local, Fecha 1, Gran Final...">
+                    </div>
+
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+                        <div class="info-row">
+                            <label><i class="fa-regular fa-calendar"></i> Fecha del Partido:</label>
+                            <input type="date" id="match-date-only-input" class="dash-input">
+                        </div>
+                        <div class="info-row">
+                            <label><i class="fa-regular fa-clock"></i> Hora del Partido:</label>
+                            <input type="time" id="match-time-only-input" class="dash-input">
+                        </div>
+                    </div>
+
+                    <div class="info-row">
+                        <label><i class="fa-solid fa-map-location-dot"></i> Lugar / Cancha:</label>
+                        <input type="text" id="match-location-input" class="dash-input" placeholder="Ej. Campo Municipal Palacagüina">
+                    </div>
+
+                    <div class="info-row">
+                        <label><i class="fa-solid fa-stopwatch"></i> Duración por tiempo:</label>
+                        <div style="display:flex; gap:10px; align-items:center;">
+                            <select id="match-duration-select" class="dash-input" style="flex:1;">
+                                <option value="45">45 min (Fútbol 11)</option>
+                                <option value="35">35 min (Intermedio)</option>
+                                <option value="25" selected>25 min (Fútbol Rápido / F7)</option>
+                                <option value="custom">Personalizado...</option>
+                            </select>
+                            <input type="number" id="match-duration-custom-input" class="dash-input" placeholder="Min" min="5" max="90" style="width:90px; display:none;">
+                        </div>
+                    </div>
+
+                    <input type="hidden" id="match-datetime-input">
+
+                    <button class="btn-save-info" id="btn-save-match-info" style="margin-top:10px;"><i class="fa-solid fa-floppy-disk"></i> Guardar Información</button>
                 </div>
             </div>
 
@@ -1288,20 +1400,31 @@
 
     <!-- Modal Seleccionar Jugador (Sub-modal para acciones) -->
     <div class="modal-overlay" id="modal-select-player" style="z-index: 2100;">
-        <div class="modal-content options-modal" style="max-width: 400px;">
-            <div class="modal-header">
-                <h2 id="select-player-title">Seleccionar Jugador</h2>
+        <div class="modal-content options-modal" style="max-width: 440px; max-height: 88vh; display: flex; flex-direction: column; overflow: hidden; padding: 0;">
+            <div class="modal-header" style="padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.08);">
+                <h2 id="select-player-title" style="margin: 0; font-size: 1.15rem;">Registrar Evento</h2>
                 <button class="close-btn" id="btn-close-select-player"><i class="fa-solid fa-xmark"></i></button>
             </div>
-            <div class="modal-body">
-                <div class="team-selector-tabs">
+            <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 18px 20px;">
+                <div class="team-selector-tabs" style="margin-bottom: 14px;">
                     <button class="team-sel-tab active" id="tab-sel-local">Local</button>
                     <button class="team-sel-tab" id="tab-sel-vis">Visitante</button>
                 </div>
-                <div class="player-selection-list" id="player-selection-list">
+                
+                <label style="color:#94a3b8; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px;">Selecciona el jugador:</label>
+                <div class="player-selection-list" id="player-selection-list" style="max-height: 220px; margin-top: 6px;">
                     <!-- Jugadores renderizados aquí -->
                 </div>
                 
+                <!-- Input del minuto del evento -->
+                <div id="evento-minuto-container" style="margin-top:15px; background: rgba(0,0,0,0.25); padding: 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.06);">
+                    <label style="color:#cbd5e1; font-size:13px; font-weight:600; display:flex; align-items:center; gap:6px;">
+                        <i class="fa-regular fa-clock" style="color:var(--accent-primary);"></i> Minuto del suceso:
+                    </label>
+                    <input type="number" id="input-evento-minuto" class="dash-input" placeholder="Minuto (ej. 12, 35, 90)" min="1" max="130" style="margin-top:6px; font-size:1.1rem; font-weight:700; text-align:center;">
+                    <small style="color:var(--text-muted); font-size:11px; display:block; margin-top:4px;">Se pre-rellena con el minuto actual en vivo o puedes ajustarlo manualmente.</small>
+                </div>
+
                 <!-- Extra input para minutos si es necesario -->
                 <div id="minutos-input-container" style="display:none; margin-top:15px;">
                     <label style="color:#fff;">Minutos jugados:</label>
@@ -1313,8 +1436,12 @@
                     <label style="color:#fff;">Entra (Jugador de banca):</label>
                     <select id="select-jugador-entra" class="dash-input" style="margin-top:5px;"></select>
                 </div>
-
-                <button class="btn-save-info" id="btn-confirm-action" style="margin-top:20px; width:100%;">Confirmar Acción</button>
+            </div>
+            
+            <div class="modal-footer" style="padding: 14px 20px; border-top: 1px solid rgba(255,255,255,0.08); background: rgba(15,23,42,0.85);">
+                <button class="btn-save-info" id="btn-confirm-action" style="width: 100%; padding: 12px; font-size: 1rem; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                    <i class="fa-solid fa-check"></i> Guardar Evento
+                </button>
             </div>
         </div>
     </div>
@@ -1729,35 +1856,75 @@
     </div>
 
 
-    <!-- Modal Resumen de Partido -->
+    <!-- Modal Resumen de Partido (Estilo Premium Fútbol Moderno) -->
     <div class="modal-overlay" id="modal-resumen-partido">
-        <div class="modal-content" style="max-width: 600px;">
-            <div class="modal-header">
-                <h2>Resumen del Partido</h2>
-                <button class="close-modal"><i class="fa-solid fa-times"></i></button>
+        <div class="modal-content match-summary-modern-card" style="max-width: 620px;">
+            <div class="match-summary-top-bar">
+                <div class="summary-match-meta">
+                    <span id="resumen-fecha-header" class="summary-date-text">Mié, 4/11</span>
+                    <span id="resumen-fase-badge" class="summary-fase-badge">Fase Regular</span>
+                </div>
+                <div class="summary-status-tag" id="resumen-status-tag">Finalizado</div>
+                <button class="close-btn close-modal" id="btn-close-resumen-modal"><i class="fa-solid fa-xmark"></i></button>
             </div>
-            <div class="modal-body" style="padding: 2rem;">
-                <div class="resumen-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
-                    <div class="resumen-team local" style="display: flex; flex-direction: column; align-items: center; flex: 1; gap: 10px;">
-                        <img id="resumen-logo-local" src="" alt="" style="width: 80px; height: 80px; object-fit: cover; border-radius: 50%;">
-                        <span id="resumen-nombre-local" style="font-size: 1.2rem; font-weight: 500; text-align: center;"></span>
-                    </div>
-                    <div class="resumen-score" style="display: flex; align-items: center; gap: 20px; font-size: 2.5rem; font-weight: 800;">
-                        <span id="resumen-goles-local">0</span>
-                        <span class="resumen-divider" style="color: var(--text-muted);">-</span>
-                        <span id="resumen-goles-vis">0</span>
-                    </div>
-                    <div class="resumen-team vis" style="display: flex; flex-direction: column; align-items: center; flex: 1; gap: 10px;">
-                        <img id="resumen-logo-vis" src="" alt="" style="width: 80px; height: 80px; object-fit: cover; border-radius: 50%;">
-                        <span id="resumen-nombre-vis" style="font-size: 1.2rem; font-weight: 500; text-align: center;"></span>
-                    </div>
+
+            <!-- Scoreboard Moderno Central -->
+            <div class="match-summary-scoreboard">
+                <div class="summary-team-col local">
+                    <img id="resumen-logo-local" src="" alt="Local" class="summary-team-logo">
+                    <span id="resumen-nombre-local" class="summary-team-name">Local</span>
                 </div>
-                <div class="resumen-info-extra" style="text-align:center; color:var(--text-muted); font-size:14px; margin-bottom: 20px; text-transform: uppercase; letter-spacing: 1px;" id="resumen-fase-info"></div>
-                <div class="resumen-events-container" style="display:flex; border-top:1px solid rgba(255,255,255,0.1); padding-top:20px; font-size:14px; gap: 20px;">
-                    <div id="resumen-events-local" style="flex:1; text-align:right; display:flex; flex-direction:column; gap:8px;"></div>
-                    <div style="width:1px; background:rgba(255,255,255,0.1);"></div>
-                    <div id="resumen-events-vis" style="flex:1; text-align:left; display:flex; flex-direction:column; gap:8px;"></div>
+
+                <div class="summary-score-col">
+                    <span id="resumen-goles-local" class="summary-score-num">0</span>
+                    <span class="summary-score-dash">-</span>
+                    <span id="resumen-goles-vis" class="summary-score-num">0</span>
                 </div>
+
+                <div class="summary-team-col vis">
+                    <img id="resumen-logo-vis" src="" alt="Visitante" class="summary-team-logo">
+                    <span id="resumen-nombre-vis" class="summary-team-name">Visitante</span>
+                </div>
+            </div>
+
+            <!-- Lista de Incidencias Centralizadas (Goles, Tarjetas) -->
+            <div class="match-summary-incidencias">
+                <!-- Sección Goles -->
+                <div class="incidencia-group" id="incidencias-goles-group">
+                    <div class="incidencia-group-header">
+                        <i class="fa-solid fa-futbol"></i> Goles
+                    </div>
+                    <div id="incidencias-goles-list" class="incidencias-timeline"></div>
+                </div>
+
+                <!-- Sección Tarjetas Amarillas -->
+                <div class="incidencia-group" id="incidencias-amarillas-group" style="display:none;">
+                    <div class="incidencia-group-header">
+                        <span class="card-icon-tag yellow"></span> Tarjetas Amarillas
+                    </div>
+                    <div id="incidencias-amarillas-list" class="incidencias-timeline"></div>
+                </div>
+
+                <!-- Sección Tarjetas Rojas -->
+                <div class="incidencia-group" id="incidencias-rojas-group" style="display:none;">
+                    <div class="incidencia-group-header">
+                        <span class="card-icon-tag red"></span> Tarjetas Rojas
+                    </div>
+                    <div id="incidencias-rojas-list" class="incidencias-timeline"></div>
+                </div>
+
+                <!-- Mensaje vacío si no hubo eventos -->
+                <div id="incidencias-empty-state" style="display:none; text-align:center; padding: 25px; color: var(--text-muted); font-size: 13px;">
+                    <i class="fa-regular fa-futbol" style="font-size: 24px; margin-bottom: 8px; display:block; opacity:0.5;"></i>
+                    Partido finalizado sin incidencias registradas.
+                </div>
+            </div>
+
+            <!-- Acciones al pie del resumen -->
+            <div class="match-summary-footer">
+                <button class="btn-summary-action" id="btn-reabrir-partido-desde-resumen">
+                    <i class="fa-solid fa-gamepad"></i> Abrir en Gestor en Vivo / Editar
+                </button>
             </div>
         </div>
     </div>
@@ -1791,6 +1958,134 @@
                 </div>
                 
                 <button type="button" class="btn-primary" id="btn-inscribir-escaneados" style="width: 100%; margin-top: 20px; font-size: 1.1rem; padding: 12px;"><i class="fa-solid fa-users"></i> Inscribir Seleccionados</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Detalle de Partidos del Equipo (Tocado desde Tabla de Posiciones) -->
+    <div class="modal-overlay" id="modal-equipo-partidos-detalle">
+        <div class="modal-content modal-equipo-matches" style="max-width: 680px; padding: 0; overflow: hidden; border-radius: 16px;">
+            <div class="equipo-matches-header">
+                <div class="equipo-matches-brand">
+                    <img id="modal-eq-matches-logo" src="" alt="Escudo" class="equipo-matches-logo">
+                    <div>
+                        <h2 id="modal-eq-matches-nombre" style="margin:0; font-size:1.3rem; font-weight:800; color:#fff;">Equipo</h2>
+                        <span id="modal-eq-matches-grupo" style="font-size:0.8rem; color:var(--accent-primary); font-weight:600; text-transform:uppercase; letter-spacing:1px;">LIGA GENERAL</span>
+                    </div>
+                </div>
+                <button class="close-btn" id="btn-close-equipo-matches" style="background:rgba(255,255,255,0.1); border-radius:50%; width:36px; height:36px; display:flex; align-items:center; justify-content:center; color:#fff; cursor:pointer;"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <!-- Tabs Jugados vs Programados -->
+            <div class="equipo-matches-tabs">
+                <button class="tab-item active" data-tab="all" id="tab-matches-all">
+                    <i class="fa-solid fa-calendar-days"></i> Todos (<span id="count-matches-all">0</span>)
+                </button>
+                <button class="tab-item" data-tab="jugados" id="tab-matches-jugados">
+                    <i class="fa-solid fa-check-double"></i> Jugados (<span id="count-matches-jugados">0</span>)
+                </button>
+                <button class="tab-item" data-tab="programados" id="tab-matches-programados">
+                    <i class="fa-solid fa-clock"></i> Programados (<span id="count-matches-programados">0</span>)
+                </button>
+            </div>
+
+            <!-- Resumen Rápido Stats del Equipo -->
+            <div class="equipo-matches-stats-bar" id="modal-eq-matches-stats">
+                <!-- Inyectado por JS: PJ, PG, PE, PP, GF, GC, DIF, PTS -->
+            </div>
+
+            <div class="equipo-matches-list" id="modal-eq-matches-list">
+                <!-- Partidos generados dinámicamente -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Configuración de Zonas / Paleta de Colores de Posiciones -->
+    <div class="modal-overlay" id="modal-posiciones-highlight-config">
+        <div class="modal-content highlight-config-modal-box">
+            <div class="highlight-config-header">
+                <h3 style="margin:0; font-size:1.15rem; font-weight:800; color:#1e293b; display:flex; align-items:center; justify-content:space-between; width:100%;">
+                    <span>Resaltar Posiciones</span>
+                    <button type="button" class="close-btn" id="btn-close-highlight-config" style="color:#64748b; background:none; border:none; font-size:1.2rem; cursor:pointer;"><i class="fa-solid fa-xmark"></i></button>
+                </h3>
+            </div>
+
+            <div class="highlight-config-body">
+                <!-- SECCIÓN: RESALTAR PRIMEROS -->
+                <div class="highlight-section-title">Resaltar Primeros</div>
+                
+                <!-- Fila Zona 1 (Default Azul) -->
+                <div class="highlight-slider-row">
+                    <label class="color-picker-label" title="Toca para cambiar color">
+                        <input type="color" id="hl-color-top1" value="#0088ff" class="native-color-picker">
+                        <span class="color-dot" id="dot-color-top1" style="background:#0088ff;"></span>
+                    </label>
+                    <div class="slider-track-wrap">
+                        <input type="range" id="hl-range-top1" min="0" max="20" value="0" class="custom-highlight-range" style="--track-color: #0088ff;">
+                        <span class="range-bubble" id="bubble-top1" style="display:none; background:#0088ff;">0</span>
+                    </div>
+                    <label class="color-picker-label" title="Toca para cambiar color">
+                        <input type="color" id="hl-color-top1-alt" value="#0088ff" class="native-color-picker">
+                        <span class="color-dot" id="dot-color-top1-alt" style="background:#0088ff;"></span>
+                    </label>
+                </div>
+
+                <!-- Fila Zona 2 (Default Verde) -->
+                <div class="highlight-slider-row">
+                    <label class="color-picker-label" title="Toca para cambiar color">
+                        <input type="color" id="hl-color-top2" value="#22c55e" class="native-color-picker">
+                        <span class="color-dot" id="dot-color-top2" style="background:#22c55e;"></span>
+                    </label>
+                    <div class="slider-track-wrap">
+                        <input type="range" id="hl-range-top2" min="0" max="20" value="4" class="custom-highlight-range" style="--track-color: #22c55e;">
+                        <span class="range-bubble" id="bubble-top2" style="display:flex; background:#22c55e;">4</span>
+                    </div>
+                    <label class="color-picker-label" title="Toca para cambiar color">
+                        <input type="color" id="hl-color-top2-alt" value="#22c55e" class="native-color-picker">
+                        <span class="color-dot" id="dot-color-top2-alt" style="background:#22c55e;"></span>
+                    </label>
+                </div>
+
+                <!-- SECCIÓN: RESALTAR ÚLTIMOS -->
+                <div class="highlight-section-title" style="margin-top: 22px;">Resaltar Últimos</div>
+
+                <!-- Fila Zona 3 (Default Naranja) -->
+                <div class="highlight-slider-row">
+                    <label class="color-picker-label" title="Toca para cambiar color">
+                        <input type="color" id="hl-color-bottom1" value="#f59e0b" class="native-color-picker">
+                        <span class="color-dot" id="dot-color-bottom1" style="background:#f59e0b;"></span>
+                    </label>
+                    <div class="slider-track-wrap">
+                        <input type="range" id="hl-range-bottom1" min="0" max="20" value="0" class="custom-highlight-range" style="--track-color: #f59e0b;">
+                        <span class="range-bubble" id="bubble-bottom1" style="display:none; background:#f59e0b;">0</span>
+                    </div>
+                    <label class="color-picker-label" title="Toca para cambiar color">
+                        <input type="color" id="hl-color-bottom1-alt" value="#f59e0b" class="native-color-picker">
+                        <span class="color-dot" id="dot-color-bottom1-alt" style="background:#f59e0b;"></span>
+                    </label>
+                </div>
+
+                <!-- Fila Zona 4 (Default Rojo) -->
+                <div class="highlight-slider-row">
+                    <label class="color-picker-label" title="Toca para cambiar color">
+                        <input type="color" id="hl-color-bottom2" value="#ef4444" class="native-color-picker">
+                        <span class="color-dot" id="dot-color-bottom2" style="background:#ef4444;"></span>
+                    </label>
+                    <div class="slider-track-wrap">
+                        <input type="range" id="hl-range-bottom2" min="0" max="20" value="0" class="custom-highlight-range" style="--track-color: #ef4444;">
+                        <span class="range-bubble" id="bubble-bottom2" style="display:none; background:#ef4444;">0</span>
+                    </div>
+                    <label class="color-picker-label" title="Toca para cambiar color">
+                        <input type="color" id="hl-color-bottom2-alt" value="#ef4444" class="native-color-picker">
+                        <span class="color-dot" id="dot-color-bottom2-alt" style="background:#ef4444;"></span>
+                    </label>
+                </div>
+
+                <div class="highlight-actions-footer">
+                    <button type="button" class="btn-clear-highlights" id="btn-reset-highlights">Quitar Todo</button>
+                    <button type="button" class="btn-guardar-highlights" id="btn-save-highlights">Guardar</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -1818,15 +2113,15 @@
         </button>
     </nav>
 
-    <!-- External Scripts -->
+    <!-- External Scripts (Optimizados con defer para arranque instantáneo en móvil) -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js" defer></script>
     <script src="js/db.js?v=6"></script>
-    <script src="img/referee_cards_b64.js"></script>
-    <script src="img/soccer_turf_b64.js"></script>
-    <script src="js/app.js?v=51"></script>
-    <script src="js/alineaciones.js?v=3"></script>
+    <script src="img/referee_cards_b64.js" defer></script>
+    <script src="img/soccer_turf_b64.js" defer></script>
+    <script src="js/app.js?v=68" defer></script>
+    <script src="js/alineaciones.js?v=3" defer></script>
 </body>
 </html>
