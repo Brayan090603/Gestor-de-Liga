@@ -2271,11 +2271,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         const count = modalSelectedTeams.size;
         const fase = selectNuevoCalFase?.value || 'liga';
 
-        // Partidos por fecha
+        // Partidos por fecha reales (los descansos no consumen horario de juego)
         let partidosPorFecha = 0;
         if (fase === 'liga') {
-            const effectiveTeams = count % 2 === 0 ? count : count + 1;
-            partidosPorFecha = Math.floor(effectiveTeams / 2);
+            partidosPorFecha = Math.floor(count / 2);
         } else {
             // Eliminatorias
             partidosPorFecha = Math.max(1, Math.floor(count / 2));
@@ -2336,16 +2335,16 @@ document.addEventListener("DOMContentLoaded", async () => {
             const isPar = count % 2 === 0;
             const effectiveTeams = isPar ? count : count + 1;
             const jornadasBase = effectiveTeams - 1;
-            const partidosPorFecha = effectiveTeams / 2;
+            const partidosRealesPorFecha = Math.floor(count / 2);
             const totalJornadas = formato === 'idayvuelta' ? jornadasBase * 2 : jornadasBase;
-            const totalPartidos = totalJornadas * (isPar ? partidosPorFecha : (count - 1) / 2);
-            const horarioTxt = modalConHorarios ? ` &bull; <strong>${partidosPorFecha} horarios configurados</strong> por fecha` : ` &bull; <span style="color: #94a3b8;">Sin horarios</span>`;
-            const descansoTxt = !isPar ? ` &bull; <span style="color: #f59e0b;">1 equipo descansa por jornada</span>` : '';
+            const totalPartidos = totalJornadas * partidosRealesPorFecha;
+            const horarioTxt = modalConHorarios ? ` &bull; <strong>${partidosRealesPorFecha} horarios configurados</strong> por fecha` : ` &bull; <span style="color: #94a3b8;">Sin horarios</span>`;
+            const descansoTxt = !isPar ? ` &bull; <span style="color: #f59e0b;">1 equipo descansa (libre) por jornada</span>` : '';
 
             resumenEl.innerHTML = `
                 <i class="fa-solid fa-calendar-check" style="color: #10b981;"></i> 
                 <strong>${count} equipos</strong> &bull; 
-                <strong>${totalJornadas} jornadas</strong> (${totalPartidos} partidos en total)${horarioTxt}${descansoTxt}.
+                <strong>${totalJornadas} jornadas</strong> (${totalPartidos} partidos a jugar)${horarioTxt}${descansoTxt}.
             `;
         } else {
             const llaves = Math.floor(count / 2);
@@ -2578,12 +2577,18 @@ document.addEventListener("DOMContentLoaded", async () => {
                 const partidosPorJornada = numEquipos / 2;
 
                 for (let r = 0; r < jornadas; r++) {
+                    let realMatchIdx = 0;
                     for (let i = 0; i < partidosPorJornada; i++) {
                         const local = equiposLiga[i];
                         const visitante = equiposLiga[numEquipos - 1 - i];
+                        const isJuegoVacante = local.id === 'vacante' || visitante.id === 'vacante';
 
-                        // Obtener hora asignada a este juego si aplica
-                        const assignedHora = (modalConHorarios && matchSchedules[i]) ? matchSchedules[i] : null;
+                        // Solo los partidos reales consumen un horario configurado
+                        let assignedHora = null;
+                        if (!isJuegoVacante && modalConHorarios && matchSchedules[realMatchIdx]) {
+                            assignedHora = matchSchedules[realMatchIdx];
+                            realMatchIdx++;
+                        }
 
                         const partidoObj = {
                             id: (idCounter++).toString(),
@@ -3299,68 +3304,50 @@ document.addEventListener("DOMContentLoaded", async () => {
         html += `<div class="jornada-matches">`;
         html += `<h4 style="margin: 0 0 15px 0; color: var(--accent-primary); border-bottom: 1px solid var(--border-color); padding-bottom: 5px;">${jornadaName.replace(/Jornada\s(\d+)/, "$1º Fecha")}</h4>`;
 
-        partidosPorJornada[jornadaName].forEach((p, index) => {
-            const local = p.equipo1Id === 'vacante' ? { id: 'vacante', nombre: 'VACANTE (Descansa)', logo: '' } : appData.equipos.find(e => e.id === p.equipo1Id) || { nombre: 'Equipo Desconocido' };
-            const visitante = p.equipo2Id === 'vacante' ? { id: 'vacante', nombre: 'VACANTE (Descansa)', logo: '' } : appData.equipos.find(e => e.id === p.equipo2Id) || { nombre: 'Equipo Desconocido' };
+        // Separar partidos reales de los que tienen equipo vacante (descansa)
+        const listaPartidosJornada = partidosPorJornada[jornadaName] || [];
+        const partidosReales = listaPartidosJornada.filter(p => p.equipo1Id !== 'vacante' && p.equipo2Id !== 'vacante');
+        const partidosVacantes = listaPartidosJornada.filter(p => p.equipo1Id === 'vacante' || p.equipo2Id === 'vacante');
 
-            const isVacante = local.id === 'vacante' || visitante.id === 'vacante';
+        // 1. Renderizar partidos reales numerados
+        partidosReales.forEach((p, index) => {
+            const local = appData.equipos.find(e => e.id === p.equipo1Id) || { nombre: 'Equipo Desconocido' };
+            const visitante = appData.equipos.find(e => e.id === p.equipo2Id) || { nombre: 'Equipo Desconocido' };
 
-            let inputArea = "";
             let isFinalizado = false;
-            if (!isVacante) {
-                const g1Val = p.goles1 !== null ? p.goles1 : "";
-                const g2Val = p.goles2 !== null ? p.goles2 : "";
-
-                let scoreDisplay = "";
-                if ((p.detalles && p.detalles.estado === 'finalizado') || (p.goles1 !== null && p.goles2 !== null && p.goles1 !== "" && p.goles2 !== "")) {
-                    isFinalizado = true;
-                    scoreDisplay = `<div style="font-size: 1.5rem; font-weight: 800; color: white; margin-top: 5px;">${p.goles1 || 0} - ${p.goles2 || 0}</div>`;
-                }
-                inputArea = scoreDisplay;
-            } else {
-                inputArea = `<span style="font-size: 13px; color: var(--text-muted); margin-top: 5px;">(Descansa en esta fecha)</span>`;
-            }
-
-            const localImg = local.logo ? `<img src="${local.logo}" alt="L">` : `<i class="fa-solid fa-shield"></i>`;
-            const visImg = visitante.logo ? `<img src="${visitante.logo}" alt="V">` : `<i class="fa-solid fa-shield"></i>`;
-
-            const localClasses = local.id === 'vacante' ? 'match-team local match-vacante' : 'match-team local';
-            const visClasses = visitante.id === 'vacante' ? 'match-team away match-vacante' : 'match-team away';
-
-            const badgeHtml = (p.fase === 'grupos' && p.grupo) ? `<div style="text-align:center; margin-bottom:5px;"><span class="team-badge" style="background:var(--accent-primary);color:var(--bg-primary);">${p.grupo}</span></div>` : '';
-
-            let actionButtons = '';
-            if (local.id !== 'vacante' && visitante.id !== 'vacante') {
-                if (isFinalizado) {
-                    actionButtons = `
-                        <div style="display:flex; gap: 5px; margin-top:5px;">
-                            <button class="btn-primary btn-fast-result" data-match-id="${p.id}" style="font-size:0.75rem; padding: 4px 10px; border-radius:15px; background: #3b82f6;"><i class="fa-solid fa-pen"></i> Editar</button>
-                            <span style="font-size:0.75rem; padding: 4px 10px; border-radius:15px; background: rgba(0, 0, 0, 0.1); color: var(--text-muted); display:flex; align-items:center; gap:5px;"><i class="fa-solid fa-flag-checkered"></i> Final</span>
-                        </div>
-                    `;
-                } else {
-                    actionButtons = `
-                        <div style="display:flex; gap: 5px; margin-top:5px;" onclick="event.stopPropagation()">
-                            <button class="btn-primary btn-fast-result" data-match-id="${p.id}" style="font-size:0.75rem; padding: 4px 10px; border-radius:15px; background: #3b82f6;"><i class="fa-solid fa-pen"></i> Res</button>
-                            <button class="btn-primary btn-manage-match" data-match-id="${p.id}" style="font-size:0.75rem; padding: 4px 10px; border-radius:15px; background: #10b981;"><i class="fa-solid fa-gamepad"></i> Vivo</button>
-                        </div>
-                    `;
-                }
-            }
-
             let centerVsHtml = '';
-            if (isFinalizado) {
+            if ((p.detalles && p.detalles.estado === 'finalizado') || (p.goles1 !== null && p.goles2 !== null && p.goles1 !== "" && p.goles2 !== "")) {
+                isFinalizado = true;
                 centerVsHtml = `<div style="font-size: 1.5rem; font-weight: 800; color: white; margin: 10px 0;">${p.goles1 || 0} - ${p.goles2 || 0}</div>`;
             } else {
                 centerVsHtml = `<div class="match-vs"><div class="dots"><span></span><span></span></div></div>`;
             }
-            
+
+            const badgeHtml = (p.fase === 'grupos' && p.grupo) ? `<div style="text-align:center; margin-bottom:5px;"><span class="team-badge" style="background:var(--accent-primary);color:var(--bg-primary);">${p.grupo}</span></div>` : '';
+
+            let actionButtons = '';
+            if (isFinalizado) {
+                actionButtons = `
+                    <div style="display:flex; gap: 5px; margin-top:5px;">
+                        <button class="btn-primary btn-fast-result" data-match-id="${p.id}" style="font-size:0.75rem; padding: 4px 10px; border-radius:15px; background: #3b82f6;"><i class="fa-solid fa-pen"></i> Editar</button>
+                        <span style="font-size:0.75rem; padding: 4px 10px; border-radius:15px; background: rgba(0, 0, 0, 0.1); color: var(--text-muted); display:flex; align-items:center; gap:5px;"><i class="fa-solid fa-flag-checkered"></i> Final</span>
+                    </div>
+                `;
+            } else {
+                actionButtons = `
+                    <div style="display:flex; gap: 5px; margin-top:5px;" onclick="event.stopPropagation()">
+                        <button class="btn-primary btn-fast-result" data-match-id="${p.id}" style="font-size:0.75rem; padding: 4px 10px; border-radius:15px; background: #3b82f6;"><i class="fa-solid fa-pen"></i> Res</button>
+                        <button class="btn-primary btn-manage-match" data-match-id="${p.id}" style="font-size:0.75rem; padding: 4px 10px; border-radius:15px; background: #10b981;"><i class="fa-solid fa-gamepad"></i> Vivo</button>
+                    </div>
+                `;
+            }
+
             // Si el partido tiene fecha y hora asignadas
             let dateTimeHtml = '';
-            if (!isVacante && p.detalles && (p.detalles.fecha || p.detalles.hora)) {
+            if (p.detalles && (p.detalles.fecha || p.detalles.hora)) {
                 let dt = [];
-                if(p.detalles.fecha) dt.push(p.detalles.fecha);
-                if(p.detalles.hora) dt.push(p.detalles.hora);
+                if (p.detalles.fecha) dt.push(p.detalles.fecha);
+                if (p.detalles.hora) dt.push(p.detalles.hora);
                 dateTimeHtml = `<div class="match-datetime-info">${dt.join(' | ')}</div>`;
             }
 
@@ -3389,6 +3376,28 @@ document.addEventListener("DOMContentLoaded", async () => {
             `;
             html += matchCardHtml;
         });
+
+        // 2. Renderizar equipos en descanso (vacantes) siempre al final de la jornada
+        partidosVacantes.forEach(p => {
+            const equipoLibreId = p.equipo1Id !== 'vacante' ? p.equipo1Id : p.equipo2Id;
+            const equipoLibre = appData.equipos.find(e => e.id === equipoLibreId) || { nombre: 'Equipo en descanso', logo: '' };
+
+            html += `
+                <div class="match-card match-card-descanso fade-in">
+                    <div class="descanso-badge">
+                        <i class="fa-solid fa-bed"></i> DESCANSA (LIBRE)
+                    </div>
+                    <div class="match-team local" style="max-width: 100%; flex-direction: row; gap: 14px; justify-content: center;">
+                        ${equipoLibre.logo ? `<img src="${equipoLibre.logo}" alt="Logo" style="width: 44px; height: 44px; border-radius: 50%; border: 2px solid var(--accent-primary);">` : `<i class="fa-solid fa-shield" style="font-size: 28px; color: var(--accent-primary);"></i>`}
+                        <div style="text-align: left;">
+                            <span style="font-size: 15px; font-weight: 700; color: #fff; display: block;">${equipoLibre.nombre || equipoLibre.name}</span>
+                            <span style="font-size: 12px; color: var(--text-secondary); font-weight: 400; text-transform: none;">No disputa partido en esta jornada &bull; Jornada Libre</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+
         html += `</div>`;
 
         sorteoResultadosContainer.innerHTML = html;
