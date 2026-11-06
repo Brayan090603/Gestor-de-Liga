@@ -7,17 +7,23 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/style.css?v=15">
+    <link rel="stylesheet" href="css/style.css?v=16">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="manifest" href="manifest.json">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 <body>
     <div class="app-container">
+        <!-- Overlay oscuro para cerrar sidebar en móvil al tocar afuera -->
+        <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
         <!-- Sidebar Navigation -->
         <!-- Sidebar -->
         <aside class="sidebar" id="sidebar">
             <div class="logo-container">
+                <button class="mobile-close-sidebar-btn" id="mobile-close-sidebar" aria-label="Cerrar menú">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
                 <i id="liga-logo-icon" class="fa-solid fa-futbol logo-icon"></i>
                 <img id="liga-logo-img" src="" style="display:none; width:80px; height:80px; border-radius:50%; margin-bottom:10px; object-fit:cover; border:2px solid var(--accent-primary); box-shadow: var(--shadow-neon);">
                 <h1 id="liga-name-title">FEMFUTPAL</h1>
@@ -104,9 +110,14 @@
 
             <!-- Header -->
             <header class="top-header">
-                <div class="header-title">
-                    <h2 id="current-tab-title">Equipos de la Liga</h2>
-                    <p class="date-text">Temporada <span id="season-label">2026</span></p>
+                <div class="header-title-wrapper" style="display: flex; align-items: center; gap: 12px;">
+                    <button class="mobile-menu-btn" id="mobile-menu-toggle" aria-label="Abrir menú de navegación">
+                        <i class="fa-solid fa-bars"></i>
+                    </button>
+                    <div class="header-title">
+                        <h2 id="current-tab-title">Equipos de la Liga</h2>
+                        <p class="date-text">Temporada <span id="season-label">2026</span></p>
+                    </div>
                 </div>
                 
                 <!-- Right Side Actions & Profile -->
@@ -1780,9 +1791,32 @@
                 </div>
                 
                 <button type="button" class="btn-primary" id="btn-inscribir-escaneados" style="width: 100%; margin-top: 20px; font-size: 1.1rem; padding: 12px;"><i class="fa-solid fa-users"></i> Inscribir Seleccionados</button>
-            </div>
         </div>
     </div>
+
+    <!-- Barra de Navegación Inferior Móvil (Bottom Navigation) -->
+    <nav class="mobile-bottom-nav" id="mobile-bottom-nav">
+        <button class="mobile-bottom-item active" data-view="inicio" data-tab="inicio" aria-label="Inicio">
+            <i class="fa-solid fa-house"></i>
+            <span>Inicio</span>
+        </button>
+        <button class="mobile-bottom-item" data-view="equipos" data-tab="equipos" aria-label="Equipos">
+            <i class="fa-solid fa-shield-halved"></i>
+            <span>Equipos</span>
+        </button>
+        <button class="mobile-bottom-item" data-view="posiciones" data-tab="posiciones" aria-label="Posiciones">
+            <i class="fa-solid fa-list-ol"></i>
+            <span>Tabla</span>
+        </button>
+        <button class="mobile-bottom-item" data-view="sorteos" data-tab="sorteos" aria-label="Partidos">
+            <i class="fa-solid fa-shuffle"></i>
+            <span>Partidos</span>
+        </button>
+        <button class="mobile-bottom-item" id="mobile-bottom-more-btn" aria-label="Más opciones">
+            <i class="fa-solid fa-bars"></i>
+            <span>Más</span>
+        </button>
+    </nav>
 
     <!-- External Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -1792,7 +1826,7 @@
     <script src="js/db.js?v=6"></script>
     <script src="img/referee_cards_b64.js"></script>
     <script src="img/soccer_turf_b64.js"></script>
-    <script src="js/app.js?v=49"></script>
+    <script src="js/app.js?v=50"></script>
     <script src="js/alineaciones.js?v=3"></script>
 </body>
 </html>

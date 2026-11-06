@@ -1319,8 +1319,78 @@ document.addEventListener("DOMContentLoaded", async () => {
                 renderTablaPosiciones();
             }
 
+            // Actualizar estado activo en la barra inferior móvil si coincide
+            document.querySelectorAll(".mobile-bottom-item").forEach(b => {
+                if (b.getAttribute("data-view") === viewTarget) {
+                    b.classList.add("active");
+                } else if (b.getAttribute("data-view")) {
+                    b.classList.remove("active");
+                }
+            });
+
+            // Cerrar menú drawer móvil automáticamente al navegar
+            const mobileSidebar = document.getElementById("sidebar");
+            const mobileOverlay = document.getElementById("sidebar-overlay");
+            if (mobileSidebar && mobileSidebar.classList.contains("open")) {
+                mobileSidebar.classList.remove("open");
+                if (mobileOverlay) mobileOverlay.classList.remove("active");
+                document.body.style.overflow = "";
+            }
         });
     });
+
+    // Control del Menú Móvil Lateral (Drawer) y Botón Hamburguesa
+    const mobileMenuToggle = document.getElementById("mobile-menu-toggle");
+    const mobileCloseSidebar = document.getElementById("mobile-close-sidebar");
+    const mobileOverlay = document.getElementById("sidebar-overlay");
+    const mobileSidebar = document.getElementById("sidebar");
+    const mobileBottomMoreBtn = document.getElementById("mobile-bottom-more-btn");
+
+    function openMobileSidebar() {
+        if (mobileSidebar) mobileSidebar.classList.add("open");
+        if (mobileOverlay) mobileOverlay.classList.add("active");
+        document.body.style.overflow = "hidden"; // Evita scroll de fondo cuando el menú está abierto
+    }
+
+    function closeMobileSidebar() {
+        if (mobileSidebar) mobileSidebar.classList.remove("open");
+        if (mobileOverlay) mobileOverlay.classList.remove("active");
+        document.body.style.overflow = "";
+    }
+
+    if (mobileMenuToggle) {
+        mobileMenuToggle.addEventListener("click", openMobileSidebar);
+    }
+
+    if (mobileCloseSidebar) {
+        mobileCloseSidebar.addEventListener("click", closeMobileSidebar);
+    }
+
+    if (mobileOverlay) {
+        mobileOverlay.addEventListener("click", closeMobileSidebar);
+    }
+
+    if (mobileBottomMoreBtn) {
+        mobileBottomMoreBtn.addEventListener("click", () => {
+            if (mobileSidebar && mobileSidebar.classList.contains("open")) {
+                closeMobileSidebar();
+            } else {
+                openMobileSidebar();
+            }
+        });
+    }
+
+    // Delegación de clics para los botones de la barra inferior móvil (Bottom Navigation)
+    document.querySelectorAll(".mobile-bottom-item[data-view]").forEach(btn => {
+        btn.addEventListener("click", () => {
+            const targetView = btn.getAttribute("data-view");
+            const navLink = document.querySelector(`.sidebar .nav-item[data-view="${targetView}"]`);
+            if (navLink) {
+                navLink.click();
+            }
+        });
+    });
+
 
     btnBackEquipos.addEventListener("click", () => {
         viewEquipoDetalle.classList.remove("active");
