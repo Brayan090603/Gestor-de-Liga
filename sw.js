@@ -1,9 +1,10 @@
-const CACHE_NAME = 'femfutpal-cache-v9';
+const CACHE_NAME = 'ligaapp-cache-v10';
 const urlsToCache = [
   './',
   './index.html',
   './panel.html',
-  './css/style.css'
+  './css/style.css',
+  './img/ligaapp-logo.png'
 ];
 
 self.addEventListener('install', event => {

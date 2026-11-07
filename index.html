@@ -4,8 +4,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bienvenido - FEMFUTPAL</title>
-    <link rel="stylesheet" href="css/style.css">
+    <title>LigaApp - Gestión de Torneos</title>
+    <link rel="icon" type="image/png" href="img/ligaapp-logo.png">
+    <link rel="stylesheet" href="css/style.css?v=27">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="manifest" href="manifest.json">
     <style>
@@ -30,6 +31,48 @@
             text-align: center;
             box-shadow: var(--shadow-lg), 0 0 40px rgba(16, 185, 129, 0.1);
             animation: fadeIn 0.8s ease forwards;
+        }
+
+        .app-brand-header {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 25px;
+        }
+
+        .app-brand-logo {
+            width: 90px;
+            height: 90px;
+            object-fit: cover;
+            border-radius: 22px;
+            border: 2px solid rgba(132, 204, 22, 0.4);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 0 20px rgba(132, 204, 22, 0.25);
+            margin-bottom: 12px;
+        }
+
+        .app-brand-title {
+            font-size: 28px;
+            font-weight: 800;
+            margin: 0;
+            letter-spacing: 0.5px;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            gap: 2px;
+        }
+
+        .app-brand-title span.highlight {
+            color: #84cc16;
+        }
+
+        .app-brand-slogan {
+            font-size: 11px;
+            letter-spacing: 2px;
+            color: #94a3b8;
+            text-transform: uppercase;
+            font-weight: 700;
+            margin: 4px 0 0 0;
         }
 
         .setup-container h1 {
@@ -268,8 +311,11 @@
 
         <!-- PASO 0: LANZADOR DE TORNEOS -->
         <div id="step-0" class="step active">
-            <i class="fa-solid fa-list-ul"
-                style="font-size: 50px; color: var(--accent-primary); margin-bottom: 20px;"></i>
+            <div class="app-brand-header">
+                <img src="img/ligaapp-logo.png" alt="LigaApp Logo" class="app-brand-logo">
+                <h2 class="app-brand-title"><span class="highlight">Liga</span>App</h2>
+                <p class="app-brand-slogan">GESTIÓN DE TORNEOS</p>
+            </div>
             <h1>Mis Torneos</h1>
             <p>Selecciona un torneo para continuar o crea uno nuevo.</p>
 
