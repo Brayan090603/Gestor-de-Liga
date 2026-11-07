@@ -230,9 +230,14 @@ body {
 /* Elementos móviles ocultos por defecto en Desktop */
 .mobile-menu-btn,
 .sidebar-overlay,
-.mobile-close-sidebar-btn,
-.mobile-bottom-nav {
+.mobile-close-sidebar-btn {
     display: none;
+}
+
+@media (min-width: 769px) {
+    .mobile-bottom-nav {
+        display: none !important;
+    }
 }
 
 /* Dashboard Area */
@@ -729,7 +734,15 @@ body {
         width: 100%;
         display: flex !important;
         align-items: center;
-        gap: 12px;
+        gap: 10px;
+    }
+
+    .header-app-brand {
+        flex-shrink: 0;
+    }
+
+    .header-app-brand:active {
+        transform: scale(0.96);
     }
 
     .mobile-menu-btn {
