@@ -508,9 +508,6 @@ body {
     body {
         background-attachment: scroll !important;
         padding-bottom: calc(75px + env(safe-area-inset-bottom, 0px)) !important;
-        /* Optimización de rendimiento móvil: aceleración por hardware */
-        transform: translateZ(0);
-        will-change: auto;
     }
 
     .app-container {
@@ -822,8 +819,6 @@ body {
         border-top: 1px solid rgba(255, 255, 255, 0.1);
         box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.65);
         z-index: 9999 !important;
-        transform: translate3d(0, 0, 0);
-        -webkit-transform: translate3d(0, 0, 0);
         justify-content: space-around;
         align-items: center;
         box-sizing: border-box;
