@@ -44,3 +44,18 @@ function hideLoader() {
         loader.style.display = 'none';
     }
 }
+
+// Lazy Loader para scripts pesados (libera memoria y acelera el inicio)
+window.lazyLoadScript = function(src) {
+    return new Promise((resolve, reject) => {
+        const existing = document.querySelector(`script[src="${src}"]`);
+        if (existing) {
+            return resolve();
+        }
+        const s = document.createElement('script');
+        s.src = src;
+        s.onload = () => resolve();
+        s.onerror = (e) => reject(e);
+        document.body.appendChild(s);
+    });
+};

@@ -198,10 +198,16 @@ async function loadDataFromSupabase() {
         fecha_fin: torneo.fecha_fin || ""
     };
 
-    // 2. Cargar Equipos
-    const { data: equiposData } = await supabase.from('equipos').select('*').eq('torneo_id', activeId);
-    if (equiposData) {
-        appData.equipos = equiposData.map(e => ({
+    // 2. Cargar Equipos, Jugadores y Movimientos en Paralelo (Aceleración de consultas)
+    const [equiposRes, jugRes, movRes] = await Promise.all([
+        supabase.from('equipos').select('*').eq('torneo_id', activeId),
+        supabase.from('jugadores').select('*').eq('torneo_id', activeId),
+        supabase.from('movimientos').select('*').eq('torneo_id', activeId).order('created_at', { ascending: true })
+    ]);
+
+    // Procesar Equipos
+    if (equiposRes.data) {
+        appData.equipos = equiposRes.data.map(e => ({
             id: e.id.toString(),
             nombre: e.nombre,
             logo: e.logo,
@@ -209,10 +215,9 @@ async function loadDataFromSupabase() {
         }));
     }
 
-    // 3. Cargar Jugadores
-    const { data: jugData } = await supabase.from('jugadores').select('*').eq('torneo_id', activeId);
-    if (jugData) {
-        appData.jugadores = jugData.map(j => ({
+    // Procesar Jugadores
+    if (jugRes.data) {
+        appData.jugadores = jugRes.data.map(j => ({
             id: j.id.toString(),
             equipoId: j.equipo_id ? j.equipo_id.toString() : null,
             nombre: j.nombre,
@@ -242,10 +247,9 @@ async function loadDataFromSupabase() {
         }));
     }
 
-    // 4. Cargar Movimientos
-    const { data: movData } = await supabase.from('movimientos').select('*').eq('torneo_id', activeId).order('created_at', { ascending: true });
-    if (movData) {
-        appData.movimientos = movData.map(m => ({
+    // Procesar Movimientos
+    if (movRes.data) {
+        appData.movimientos = movRes.data.map(m => ({
             id: m.id.toString(),
             fecha: m.fecha,
             tipo: m.tipo,
@@ -4830,22 +4834,33 @@ document.addEventListener("DOMContentLoaded", async () => {
             return;
         }
 
+        const fragment = document.createDocumentFragment();
+        // Contar jugadores activos por equipo en un solo recorrido O(N) en lugar de O(N*M)
+        const counts = {};
+        appData.jugadores.forEach(p => {
+            if (p.status === 'activo' && p.equipoId) {
+                counts[p.equipoId] = (counts[p.equipoId] || 0) + 1;
+            }
+        });
+
         appData.equipos.forEach(team => {
-            const playersCount = appData.jugadores.filter(p => p.equipoId === team.id && p.status === 'activo').length;
+            const playersCount = counts[team.id] || 0;
 
             const card = document.createElement("div");
             card.className = "team-card";
             card.innerHTML = `
                 <div class="team-logo-container">
-                    ${team.logo ? `<img src="${team.logo}" alt="${team.nombre}">` : `<i class="fa-solid fa-shield"></i>`}
+                    ${team.logo ? `<img src="${team.logo}" alt="${team.nombre}" loading="lazy">` : `<i class="fa-solid fa-shield"></i>`}
                 </div>
                 <h3>${team.nombre}</h3>
                 <p>${playersCount} jugadores</p>
             `;
 
             card.addEventListener("click", () => showTeamDetail(team));
-            teamsContainer.appendChild(card);
+            fragment.appendChild(card);
         });
+
+        teamsContainer.appendChild(fragment);
     }
 
     function showTeamDetail(team) {
@@ -5673,6 +5688,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 topPlayerStat.textContent = `${novatosData[0].minutos} Minutos`;
             }
 
+            const novatosFragment = document.createDocumentFragment();
             novatosData.forEach((d) => {
                 const posClass = d.pos === 1 ? "pos-1" : d.pos === 2 ? "pos-2" : d.pos === 3 ? "pos-3" : "";
                 const tr = document.createElement("tr");
@@ -5693,8 +5709,9 @@ document.addEventListener("DOMContentLoaded", async () => {
                     <td><span class="stat-highlight" style="color: #FCD34D; font-size: 1rem;">${d.amarillas > 0 ? d.amarillas : '-'}</span></td>
                     <td><span class="stat-highlight" style="color: ${colorRendimiento}; font-size: 1rem;">${d.rendimiento}</span></td>
                 `;
-                tableBody.appendChild(tr);
+                novatosFragment.appendChild(tr);
             });
+            tableBody.appendChild(novatosFragment);
             return;
         } else if (tab === 'porteros') {
             const descriptionHTML = `<div id="stats-logic-desc" style="background: rgba(59, 130, 246, 0.1); border-left: 4px solid #3B82F6; padding: 15px; margin-bottom: 20px; border-radius: 4px; font-size: 0.9rem; color: var(--text-secondary); display: flex; justify-content: space-between; align-items: center;">
@@ -5763,6 +5780,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 topPlayerStat.textContent = `${porterosData[0].rendimientoNum} Puntos`;
             }
 
+            const porterosFragment = document.createDocumentFragment();
             porterosData.forEach((d) => {
                 const posClass = d.pos === 1 ? "pos-1" : d.pos === 2 ? "pos-2" : d.pos === 3 ? "pos-3" : "";
                 const tr = document.createElement("tr");
@@ -5782,8 +5800,9 @@ document.addEventListener("DOMContentLoaded", async () => {
                     <td><span class="stat-highlight" style="color: var(--accent-primary); font-size: 1rem;">${d.minutos}</span></td>
                     <td><span class="stat-highlight" style="color: ${colorRendimiento}; font-size: 1rem; font-weight:bold;">${d.rendimiento}</span></td>
                 `;
-                tableBody.appendChild(tr);
+                porterosFragment.appendChild(tr);
             });
+            tableBody.appendChild(porterosFragment);
             return;
         } else if (tab === 'rojas') {
             theadTr.innerHTML = `
@@ -5855,6 +5874,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             topPlayerName.textContent = statData[0].player.name;
             topPlayerStat.textContent = `${statData[0].stat} ${config.statName}`;
 
+            const standardFragment = document.createDocumentFragment();
             statData.forEach((d, index) => {
                 const pos = index + 1;
                 let posClass = pos === 1 ? "pos-1" : pos === 2 ? "pos-2" : pos === 3 ? "pos-3" : "";
@@ -5967,8 +5987,9 @@ document.addEventListener("DOMContentLoaded", async () => {
                     };
                 }
 
-                tableBody.appendChild(tr);
+                standardFragment.appendChild(tr);
             });
+            tableBody.appendChild(standardFragment);
             
             // Logica del boton Add Tarjeta y Reportes Imagen
             const btnAddTarjeta = document.getElementById("btn-add-tarjeta");
@@ -7429,6 +7450,10 @@ async function exportReporteTarjetasImage(tab, players) {
     const ligaLugar = (appData.config?.ligaInfo?.lugar || 'LIGA OFICIAL').toUpperCase();
     const ligaDedicatoria = (appData.config?.ligaInfo?.dedicatoria || '').toUpperCase();
     const ligaLogo = appData.config?.ligaInfo?.logo || '';
+    // Carga perezosa del recurso pesado si aún no está en memoria
+    if (typeof window.REFEREE_CARDS_B64 === 'undefined' && typeof window.lazyLoadScript === 'function') {
+        try { await window.lazyLoadScript('img/referee_cards_b64.js'); } catch(e) {}
+    }
     const refereeCardsImgSrc = (typeof window.REFEREE_CARDS_B64 !== 'undefined') ? window.REFEREE_CARDS_B64 : 'img/referee_cards.jpg';
 
     // Contenedor formato vertical 1080x1350 (4:5 estándar de alto impacto en Instagram/Facebook/WhatsApp)
@@ -8557,6 +8582,8 @@ window.downloadNovatosImage = function() {
     }, 500);
 };
 
+// --- MIGRACIONES COMPLETADAS (Inactivadas para garantizar rendimiento óptimo y fluidez instantánea) ---
+/*
 setTimeout(() => {
     if (!localStorage.getItem('cards_injected_batch4')) {
         console.log("Inyectando tarjetas (batch 4)...");
@@ -9009,8 +9036,8 @@ setTimeout(() => {
         }
         localStorage.setItem('cards_injected_batch9', 'true');
     }
-
 }, 3000);
+*/
 
 // Lógica para el buscador de estadísticas
 document.addEventListener('DOMContentLoaded', () => {
@@ -9036,7 +9063,8 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 
-// INYECCIÓN DE CALENDARIO CLAUSURA
+// INYECCIÓN DE CALENDARIO CLAUSURA (Completada - Desactivada para liberar CPU y red)
+/*
 setTimeout(async () => {
     if (!localStorage.getItem('calendario_clausura_injected_final_2')) {
         const removeAccents = (str) => str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
@@ -9818,7 +9846,7 @@ setTimeout(async () => {
             let eq2 = 'vacante';
 
             if (item.eq1 !== 'vacante') {
-                const searchName1 = removeAccents(item.eq1).replace(/\d+\s*/, '');
+                const searchName1 = removeAccents(item.eq1).replace(new RegExp('\\d+\\s*'), '');
                 // Intento exacto
                 let team1 = appData.equipos.find(e => removeAccents(e.nombre) === searchName1);
                 // Intento parcial (ej: PC Galaxy vs P. Club Galaxy)
@@ -9863,3 +9891,5 @@ setTimeout(async () => {
         }
     }
 }, 4500);
+*/
+

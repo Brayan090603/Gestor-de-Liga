@@ -1078,7 +1078,10 @@
             throw new Error("Elemento o librería html2canvas no disponibles.");
         }
 
-        // Asegurar fondo en Base64
+        // Asegurar fondo en Base64 (con carga perezosa bajo demanda)
+        if (typeof window.SOCCER_TURF_B64 === 'undefined' && typeof window.lazyLoadScript === 'function') {
+            try { await window.lazyLoadScript('img/soccer_turf_b64.js'); } catch(e) {}
+        }
         const bgGrass = posterEl.querySelector('.poster-grass-bg');
         if (bgGrass && typeof window.SOCCER_TURF_B64 !== 'undefined') {
             bgGrass.style.backgroundImage = `url("${window.SOCCER_TURF_B64}")`;
