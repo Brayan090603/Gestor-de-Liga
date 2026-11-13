@@ -8,7 +8,7 @@ try {
     alert("Error inicializando Supabase en db.js: " + e.message);
 }
 
-// Helper function para mostrar loaders
+// Helper function para mostrar loaders temáticos de fútbol
 function showLoader(msg = "Cargando...") {
     let loader = document.getElementById('global-loader');
     if (!loader) {
@@ -19,21 +19,84 @@ function showLoader(msg = "Cargando...") {
         loader.style.left = '0';
         loader.style.width = '100vw';
         loader.style.height = '100vh';
-        loader.style.backgroundColor = 'rgba(15, 23, 42, 0.8)';
-        loader.style.backdropFilter = 'blur(4px)';
-        loader.style.zIndex = '9999';
+        loader.style.backgroundColor = 'rgba(5, 9, 20, 0.88)';
+        loader.style.backdropFilter = 'blur(10px)';
+        loader.style.webkitBackdropFilter = 'blur(10px)';
+        loader.style.zIndex = '99999';
         loader.style.display = 'flex';
         loader.style.flexDirection = 'column';
         loader.style.justifyContent = 'center';
         loader.style.alignItems = 'center';
-        loader.style.color = '#10B981';
+        loader.style.color = '#ffffff';
+
+        // Estilos e inyección de animación temática
         loader.innerHTML = `
-            <i class="fa-solid fa-spinner fa-spin" style="font-size: 40px; margin-bottom: 15px;"></i>
-            <h3 id="global-loader-msg" style="font-family: 'Inter', sans-serif;">${msg}</h3>
+            <style>
+                @keyframes soccerBallRoll {
+                    0% { transform: translateX(-40px) rotate(0deg); }
+                    50% { transform: translateX(40px) rotate(360deg); }
+                    100% { transform: translateX(-40px) rotate(720deg); }
+                }
+                @keyframes soccerPitchPulse {
+                    0%, 100% { transform: scaleX(0.7); opacity: 0.3; }
+                    50% { transform: scaleX(1.1); opacity: 0.8; }
+                }
+                .soccer-loader-box {
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    padding: 30px 45px;
+                    border-radius: 24px;
+                    background: linear-gradient(145deg, rgba(16, 27, 49, 0.95), rgba(7, 12, 24, 0.98));
+                    border: 1px solid rgba(0, 242, 254, 0.3);
+                    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7), 0 0 35px rgba(0, 242, 254, 0.25);
+                }
+                .soccer-ball-anim {
+                    font-size: 46px;
+                    color: #ffffff;
+                    filter: drop-shadow(0 0 16px rgba(0, 255, 135, 0.6));
+                    animation: soccerBallRoll 2s infinite ease-in-out;
+                    margin-bottom: 8px;
+                }
+                .soccer-pitch-line {
+                    width: 100px;
+                    height: 4px;
+                    background: linear-gradient(90deg, transparent, #00ff87, #00f2fe, transparent);
+                    border-radius: 2px;
+                    box-shadow: 0 0 12px #00ff87;
+                    animation: soccerPitchPulse 2s infinite ease-in-out;
+                    margin-bottom: 18px;
+                }
+                .soccer-loader-title {
+                    font-family: 'Outfit', sans-serif;
+                    font-weight: 700;
+                    letter-spacing: 0.5px;
+                    font-size: 1.05rem;
+                    color: #ffffff;
+                    text-align: center;
+                    margin: 0;
+                    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+                }
+                .soccer-loader-sub {
+                    font-size: 0.75rem;
+                    text-transform: uppercase;
+                    letter-spacing: 2px;
+                    color: #00f2fe;
+                    font-weight: 700;
+                    margin-top: 6px;
+                }
+            </style>
+            <div class="soccer-loader-box">
+                <i class="fa-solid fa-futbol soccer-ball-anim"></i>
+                <div class="soccer-pitch-line"></div>
+                <h3 id="global-loader-msg" class="soccer-loader-title">${msg}</h3>
+                <span class="soccer-loader-sub">LIGA DIGITAL &bull; MATCH CENTER</span>
+            </div>
         `;
         document.body.appendChild(loader);
     } else {
-        document.getElementById('global-loader-msg').textContent = msg;
+        const msgElem = document.getElementById('global-loader-msg');
+        if (msgElem) msgElem.textContent = msg;
         loader.style.display = 'flex';
     }
 }

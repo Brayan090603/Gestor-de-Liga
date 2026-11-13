@@ -22,6 +22,45 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Mapeo de meses
     const meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 
+    // Manejo de la Firma Escaneada
+    const inputFirmaFile = document.getElementById('input-firma-file');
+    const btnSelectFirma = document.getElementById('btn-select-firma');
+    const btnRemoveFirma = document.getElementById('btn-remove-firma');
+    const firmaPreviewBox = document.getElementById('firma-preview-box');
+    const imgFirmaPreview = document.getElementById('img-firma-preview');
+    let firmaDataUrl = "";
+
+    if (btnSelectFirma && inputFirmaFile) {
+        btnSelectFirma.addEventListener('click', () => inputFirmaFile.click());
+    }
+
+    if (inputFirmaFile) {
+        inputFirmaFile.addEventListener('change', function () {
+            const file = this.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    firmaDataUrl = e.target.result;
+                    if (imgFirmaPreview) imgFirmaPreview.src = firmaDataUrl;
+                    if (firmaPreviewBox) firmaPreviewBox.style.display = 'block';
+                    if (btnRemoveFirma) btnRemoveFirma.style.display = 'block';
+                    if (btnSelectFirma) btnSelectFirma.innerHTML = '<i class="fa-solid fa-check" style="color: #10b981;"></i> Firma Cargada (Cambiar)';
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+    }
+
+    if (btnRemoveFirma) {
+        btnRemoveFirma.addEventListener('click', () => {
+            firmaDataUrl = "";
+            inputFirmaFile.value = "";
+            if (firmaPreviewBox) firmaPreviewBox.style.display = 'none';
+            if (btnRemoveFirma) btnRemoveFirma.style.display = 'none';
+            if (btnSelectFirma) btnSelectFirma.innerHTML = '<i class="fa-solid fa-camera"></i> Subir Foto de la Firma';
+        });
+    }
+
     // 1. Cargar el torneo activo
     const urlParams = new URLSearchParams(window.location.search);
     let activeId = urlParams.get('torneo');
@@ -65,6 +104,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Cargar equipos para el dropdown
         const { data: equipos } = await supabase.from('equipos').select('*').eq('torneo_id', activeId).order('nombre');
+        const preselectedEquipoId = urlParams.get('equipo');
         
         if (equipos && equipos.length > 0) {
             inputEquipo.innerHTML = '<option value="">-- Seleccione su Equipo --</option>';
@@ -73,6 +113,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 opt.value = eq.id; 
                 opt.dataset.nombre = eq.nombre;
                 opt.textContent = eq.nombre;
+                if (preselectedEquipoId && String(eq.id) === String(preselectedEquipoId)) {
+                    opt.selected = true;
+                }
                 inputEquipo.appendChild(opt);
             });
         } else {
@@ -111,30 +154,43 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         // Guardar en la base de datos (Supabase)
+        const btnSubmit = document.querySelector('.btn-submit');
+        const oldBtnText = btnSubmit.innerHTML;
         try {
-            const btnSubmit = document.querySelector('.btn-submit');
             btnSubmit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando...';
             btnSubmit.disabled = true;
 
+            const jugadorId = Date.now();
             const { error } = await supabase.from('jugadores').insert([{
-                torneo_id: activeTorneoId,
-                equipo_id: equipoId,
+                id: jugadorId,
+                torneo_id: activeTorneoId ? Number(activeTorneoId) : null,
+                equipo_id: Number(equipoId),
                 nombre: nombres,
                 status: 'activo',
+                transferencias: 0,
                 is_novato: isNovato,
                 is_portero: isPortero
             }]);
 
-            if (error) throw error;
-            
-            // Si tiene éxito, preparamos la impresión
-            btnSubmit.innerHTML = '<i class="fa-solid fa-file-pdf"></i> Generar Carta';
-            btnSubmit.disabled = false;
+            if (error) {
+                console.warn("Error Supabase con ID numérico, reintentando con ID string:", error);
+                // Si la columna id espera bigint/text diferente
+                const { error: errRetry } = await supabase.from('jugadores').insert([{
+                    id: String(Date.now()),
+                    torneo_id: activeTorneoId ? Number(activeTorneoId) : null,
+                    equipo_id: Number(equipoId),
+                    nombre: nombres,
+                    status: 'activo',
+                    transferencias: 0,
+                    is_novato: isNovato,
+                    is_portero: isPortero
+                }]);
+                if (errRetry) throw errRetry;
+            }
         } catch (error) {
             console.error("Error al guardar el jugador:", error);
-            alert("Hubo un error al guardar al jugador en la base de datos. Se generará la carta de todas formas.");
-            const btnSubmit = document.querySelector('.btn-submit');
-            btnSubmit.innerHTML = '<i class="fa-solid fa-file-pdf"></i> Generar Carta';
+            alert("Aviso: Hubo un inconveniente al guardar el jugador en la base de datos (" + (error.message || "Error desconocido") + "). Se procederá a generar la carta de todas formas.");
+        } finally {
             btnSubmit.disabled = false;
         }
 
@@ -151,54 +207,66 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('print-mes').textContent = meses[hoy.getMonth()];
         document.getElementById('print-anio').textContent = hoy.getFullYear().toString().substr(-2);
 
-        const elementToPrint = document.getElementById('print-area');
-        
-        // Crear un contenedor clonado para forzar el ancho sin afectar la vista actual
-        const cloneContainer = document.createElement('div');
-        cloneContainer.style.width = '800px';
-        cloneContainer.style.position = 'absolute';
-        cloneContainer.style.top = '0';
-        cloneContainer.style.left = '0';
-        cloneContainer.style.background = 'white';
-        cloneContainer.style.zIndex = '-9999';
-        
-        // Clonar el contenido
-        const clone = elementToPrint.cloneNode(true);
-        clone.style.display = 'block';
-        clone.style.width = '100%';
-        clone.style.padding = '40px';
-        clone.style.boxSizing = 'border-box';
-        
-        // Ajustar estilos problemáticos en el clon
-        const signatures = clone.querySelector('.signatures');
-        if(signatures) {
-            signatures.style.marginTop = '40px';
-            signatures.style.pageBreakInside = 'avoid';
+        // Llenar firma escaneada del jugador si fue cargada
+        const printFirmaJugador = document.getElementById('print-firma-jugador');
+        if (printFirmaJugador) {
+            if (firmaDataUrl) {
+                printFirmaJugador.src = firmaDataUrl;
+                printFirmaJugador.style.display = 'block';
+            } else {
+                printFirmaJugador.src = '';
+                printFirmaJugador.style.display = 'none';
+            }
         }
-        
-        cloneContainer.appendChild(clone);
-        document.body.appendChild(cloneContainer);
+
+        btnSubmit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Generando PDF...';
+        btnSubmit.disabled = true;
+
+        const printArea = document.getElementById('print-area');
+
+        // Activamos modo de exportación PDF
+        document.body.classList.add('pdf-mode');
+
+        // Aseguramos que las imágenes de logo hayan cargado
+        const images = printArea.querySelectorAll('img');
+        await Promise.all(Array.from(images).map(img => {
+            if (img.complete) return Promise.resolve();
+            return new Promise(resolve => {
+                img.onload = resolve;
+                img.onerror = resolve;
+            });
+        }));
+
+        // Pequeño timeout para renderizado de fuentes y estilos
+        await new Promise(r => setTimeout(r, 250));
 
         const fileName = `Inscripcion_${nombres.replace(/\s+/g, '_')}.pdf`;
 
         const opt = {
-            margin:       0.3,
+            margin:       [0.4, 0.4, 0.4, 0.4],
             filename:     fileName,
             image:        { type: 'jpeg', quality: 0.98 },
-            html2canvas:  { scale: 2, useCORS: true, logging: false },
+            html2canvas:  { 
+                scale: 2, 
+                useCORS: true, 
+                backgroundColor: '#ffffff',
+                logging: false,
+                scrollX: 0,
+                scrollY: 0
+            },
             jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
         };
 
-        // Cambiamos el texto del boton mientras carga
-        const btnSubmit = document.querySelector('.btn-submit');
-        const oldText = btnSubmit.innerHTML;
-        btnSubmit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Generando PDF...';
-
-        window.scrollTo(0, 0);
-
-        html2pdf().set(opt).from(cloneContainer).save().then(() => {
-            btnSubmit.innerHTML = oldText;
-            document.body.removeChild(cloneContainer);
-        });
+        try {
+            window.scrollTo(0, 0);
+            await html2pdf().set(opt).from(printArea).save();
+        } catch (pdfErr) {
+            console.error("Error al generar PDF:", pdfErr);
+            alert("Hubo un error al generar el PDF: " + pdfErr.message);
+        } finally {
+            document.body.classList.remove('pdf-mode');
+            btnSubmit.innerHTML = oldBtnText;
+            btnSubmit.disabled = false;
+        }
     });
 });
