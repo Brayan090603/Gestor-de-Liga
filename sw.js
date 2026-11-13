@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ligaapp-cache-v10';
+const CACHE_NAME = 'ligaapp-cache-v11';
 const urlsToCache = [
   './',
   './index.html',

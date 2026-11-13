@@ -138,17 +138,15 @@
 
         .pdf-mode #print-area {
             display: block !important;
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 800px;
-            max-width: none;
-            margin: 0;
-            padding: 40px;
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 30px;
             box-sizing: border-box;
-            background: white;
-            color: black;
-            z-index: 9999;
+            background: #ffffff !important;
+            color: #000000 !important;
+            font-family: 'Times New Roman', Times, serif;
         }
 
         .header-print {
@@ -193,7 +191,7 @@
             text-align: center;
             font-weight: bold;
             padding: 0 10px;
-            color: red !important;
+            color: black !important;
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
         }
@@ -271,6 +269,25 @@
                 <input type="text" id="input-direccion" required placeholder="Barrio / Comunidad">
             </div>
 
+            <div class="form-group">
+                <label style="display: flex; align-items: center; justify-content: space-between;">
+                    <span><i class="fa-solid fa-file-signature" style="color: var(--accent-primary); margin-right: 6px;"></i> Firma Escaneada del Jugador</span>
+                    <small style="color: var(--text-secondary); font-size: 12px;">Foto / Escáner</small>
+                </label>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <input type="file" id="input-firma-file" accept="image/*" style="display: none;">
+                    <button type="button" class="btn-secondary" id="btn-select-firma" style="flex: 1; padding: 11px 14px; border-radius: 8px; font-size: 14px; background: rgba(255,255,255,0.06); border: 1px dashed rgba(255,255,255,0.25); color: #e2e8f0; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; transition: all 0.2s;">
+                        <i class="fa-solid fa-camera"></i> Subir Foto de la Firma
+                    </button>
+                    <button type="button" id="btn-remove-firma" style="display: none; background: rgba(239,68,68,0.2); border: 1px solid rgba(239,68,68,0.4); color: #f87171; padding: 10px 14px; border-radius: 8px; cursor: pointer;" title="Quitar firma">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                </div>
+                <div id="firma-preview-box" style="display: none; margin-top: 10px; text-align: center; background: #ffffff; padding: 8px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15);">
+                    <img id="img-firma-preview" src="" alt="Firma Jugador" style="max-height: 70px; max-width: 200px; object-fit: contain;">
+                </div>
+            </div>
+
             <div class="form-group" style="display: flex; gap: 20px;">
                 <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                     <input type="checkbox" id="input-is-novato" style="width: auto;"> Es Novato
@@ -334,12 +351,15 @@
 
         <div class="signatures">
             <div class="signature-box">
-                <div class="signature-line"></div>
+                <div class="signature-line" style="margin-top: 50px;"></div>
                 Representante del Equipo
             </div>
-            <div class="signature-box">
+            <div class="signature-box" style="position: relative;">
+                <div id="print-firma-container" style="height: 50px; display: flex; align-items: flex-end; justify-content: center; margin-bottom: 2px;">
+                    <img id="print-firma-jugador" src="" alt="Firma" style="max-height: 48px; max-width: 160px; object-fit: contain; display: none;">
+                </div>
                 <div class="signature-line"></div>
-                jugador
+                Jugador
             </div>
         </div>
     </div>

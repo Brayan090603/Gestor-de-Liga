@@ -6,7 +6,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LigaApp - Gestión de Torneos</title>
     <link rel="icon" type="image/png" href="img/ligaapp-logo.png">
-    <link rel="stylesheet" href="css/style.css?v=27">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css?v=31">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="manifest" href="manifest.json">
     <style>
@@ -309,26 +312,195 @@
 
     <div class="setup-container">
 
-        <!-- PASO 0: LANZADOR DE TORNEOS -->
-        <div id="step-0" class="step active">
+        <!-- PANTALLA: REGISTRO / INICIAR SESIÓN (DISEÑO MODERNO DEPORTIVO) -->
+        <div id="step-auth" class="step active">
             <div class="app-brand-header">
                 <img src="img/ligaapp-logo.png" alt="LigaApp Logo" class="app-brand-logo">
                 <h2 class="app-brand-title"><span class="highlight">Liga</span>App</h2>
-                <p class="app-brand-slogan">GESTIÓN DE TORNEOS</p>
+                <p class="app-brand-slogan">PLATAFORMA PROFESIONAL DE TORNEOS</p>
+            </div>
+            
+            <h1 id="auth-title" style="font-size:24px; margin-bottom:6px; font-weight:800; letter-spacing:0.3px;">Bienvenido</h1>
+            <p id="auth-desc" style="margin-bottom:22px; color:var(--text-secondary); font-size:13.5px;">
+                Inicia sesión para gestionar tus torneos de forma privada.
+            </p>
+
+            <!-- Botón de Inicio con Google (Moderno y Destacado) -->
+            <button type="button" id="btn-auth-google" style="width:100%; padding:12px; border-radius:12px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); color:#fff; font-size:14px; font-weight:700; display:flex; align-items:center; justify-content:center; gap:12px; cursor:pointer; transition:all 0.25s ease; box-shadow:0 4px 15px rgba(0,0,0,0.3); margin-bottom:20px;">
+                <svg width="20" height="20" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                </svg>
+                <span>Continuar con Google</span>
+            </button>
+
+            <!-- Separador elegante -->
+            <div style="display:flex; align-items:center; gap:12px; margin-bottom:20px;">
+                <div style="flex:1; height:1px; background:rgba(255,255,255,0.1);"></div>
+                <span style="font-size:11px; text-transform:uppercase; letter-spacing:1px; color:#64748b; font-weight:700;">o con tu correo</span>
+                <div style="flex:1; height:1px; background:rgba(255,255,255,0.1);"></div>
+            </div>
+
+            <!-- Tabs de alternar Login vs Registro -->
+            <div style="display:flex; background:rgba(0,0,0,0.35); padding:4px; border-radius:12px; margin-bottom:20px; border:1px solid rgba(255,255,255,0.08);">
+                <button type="button" id="tab-auth-login" class="auth-tab-btn active" style="flex:1; padding:9px; border:none; border-radius:8px; font-weight:700; font-size:13px; cursor:pointer; background:var(--accent-primary); color:#fff; transition:all 0.2s;">
+                    <i class="fa-solid fa-arrow-right-to-bracket"></i> Iniciar Sesión
+                </button>
+                <button type="button" id="tab-auth-register" class="auth-tab-btn" style="flex:1; padding:9px; border:none; border-radius:8px; font-weight:700; font-size:13px; cursor:pointer; background:transparent; color:var(--text-secondary); transition:all 0.2s;">
+                    <i class="fa-solid fa-user-plus"></i> Registrarme
+                </button>
+            </div>
+
+            <!-- Formulario Principal -->
+            <form id="form-auth-portal" style="text-align:left;">
+                <div class="form-group" style="margin-bottom:15px;">
+                    <label style="font-size:12.5px; font-weight:600; color:#cbd5e1; margin-bottom:6px; display:block;">
+                        <i class="fa-solid fa-envelope" style="color:var(--accent-primary); margin-right:4px;"></i> Correo Electrónico
+                    </label>
+                    <input type="email" id="auth-email-input" class="form-control" placeholder="tu-correo@ejemplo.com" required autocomplete="email">
+                </div>
+
+                <div class="form-group" style="margin-bottom:12px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                        <label style="font-size:12.5px; font-weight:600; color:#cbd5e1; margin:0;">
+                            <i class="fa-solid fa-key" style="color:var(--accent-primary); margin-right:4px;"></i> Contraseña
+                        </label>
+                        <!-- Enlace: ¿Olvidaste tu contraseña? -->
+                        <button type="button" id="btn-forgot-password" style="background:none; border:none; color:#10b981; font-size:11.5px; cursor:pointer; font-weight:600; padding:0;">
+                            ¿Olvidaste tu contraseña?
+                        </button>
+                    </div>
+                    <div style="position:relative;">
+                        <input type="password" id="auth-pass-input" class="form-control" placeholder="••••••••" required autocomplete="current-password" style="padding-right:40px;">
+                        <button type="button" id="btn-toggle-eye-pass" style="position:absolute; right:12px; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--text-secondary); cursor:pointer;">
+                            <i class="fa-regular fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Campo Confirmar Contraseña (Solo en Modo Registro) -->
+                <div class="form-group" id="group-confirm-pass" style="display:none; margin-bottom:18px;">
+                    <label style="font-size:12.5px; font-weight:600; color:#cbd5e1; margin-bottom:6px; display:block;">
+                        <i class="fa-solid fa-shield-check" style="color:var(--accent-primary); margin-right:4px;"></i> Confirmar Contraseña
+                    </label>
+                    <div style="position:relative;">
+                        <input type="password" id="auth-confirm-pass-input" class="form-control" placeholder="Repite tu contraseña..." autocomplete="new-password" style="padding-right:40px;">
+                        <button type="button" id="btn-toggle-eye-confirm" style="position:absolute; right:12px; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--text-secondary); cursor:pointer;">
+                            <i class="fa-regular fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <button type="submit" id="btn-submit-auth-portal" class="btn-primary btn-start" style="margin-top:10px; font-weight:800; letter-spacing:0.5px;">
+                    <span id="btn-auth-text"><i class="fa-solid fa-arrow-right-to-bracket"></i> Iniciar Sesión</span>
+                </button>
+            </form>
+
+            <!-- Acceso Directo: Consultar Torneos Públicos de la Comunidad -->
+            <div style="margin-top:24px; padding-top:18px; border-top:1px solid rgba(255,255,255,0.08); text-align:center;">
+                <button type="button" id="btn-explore-public-root" style="background:transparent; border:none; color:#94a3b8; font-size:13px; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:8px; transition:color 0.2s;">
+                    <i class="fa-solid fa-earth-americas" style="color:#10b981;"></i> Ver torneos creados por otros usuarios
+                </button>
+                <div id="root-public-tournaments" style="display:none; flex-direction:column; gap:10px; margin-top:16px; text-align:left;"></div>
+            </div>
+        </div>
+
+        <!-- MODAL: RECUPERAR CONTRASEÑA CON CÓDIGO AL CORREO -->
+        <div class="modal-overlay" id="modal-forgot-password" style="display:none; z-index:99999; backdrop-filter:blur(10px); background:rgba(0,0,0,0.8);">
+            <div class="modal-content" style="max-width:440px; width:92%; background:#0f172a; border:1px solid rgba(255,255,255,0.15); border-radius:22px; box-shadow:0 30px 60px rgba(0,0,0,0.85); overflow:hidden; text-align:left;">
+                
+                <div class="modal-header" style="background:rgba(30,41,59,0.7); border-bottom:1px solid rgba(255,255,255,0.08); padding:18px 22px; display:flex; justify-content:space-between; align-items:center;">
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <div style="width:36px; height:36px; border-radius:10px; background:linear-gradient(135deg, #10b981, #059669); display:flex; align-items:center; justify-content:center; color:#fff; font-size:16px;">
+                            <i class="fa-solid fa-envelope-circle-check"></i>
+                        </div>
+                        <div>
+                            <h3 style="margin:0; font-size:16px; color:#fff; font-family:'Outfit', sans-serif;">Recuperar Contraseña</h3>
+                            <p style="margin:2px 0 0 0; color:#94a3b8; font-size:11.5px;">Restablecimiento mediante código seguro</p>
+                        </div>
+                    </div>
+                    <button type="button" class="close-btn" id="btn-close-forgot-modal" style="background:none; border:none; color:#94a3b8; font-size:18px; cursor:pointer;"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+
+                <div class="modal-body" style="padding:22px;">
+                    <!-- PASO A: Enviar Código -->
+                    <div id="forgot-step-send">
+                        <p style="font-size:13px; color:#cbd5e1; margin:0 0 16px 0; line-height:1.5;">
+                            Ingresa tu correo registrado. Te enviaremos un código de seguridad para que puedas restablecer tu contraseña.
+                        </p>
+                        <form id="form-send-reset-code">
+                            <div class="form-group" style="margin-bottom:16px;">
+                                <label style="font-size:12px; font-weight:600; color:#cbd5e1; margin-bottom:6px; display:block;">Correo Registrado</label>
+                                <input type="email" id="reset-email-input" class="form-control" placeholder="tu-correo@ejemplo.com" required>
+                            </div>
+                            <button type="submit" id="btn-send-code" class="btn-primary" style="width:100%; padding:12px; font-size:13.5px; font-weight:700; border-radius:10px;">
+                                <i class="fa-solid fa-paper-plane"></i> Enviar Código de Restablecimiento
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- PASO B: Ingresar Código y Nueva Contraseña -->
+                    <div id="forgot-step-verify" style="display:none;">
+                        <div style="background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.3); border-radius:10px; padding:12px; margin-bottom:16px;">
+                            <p id="reset-code-notice" style="margin:0; font-size:12.5px; color:#34d399; font-weight:600;">
+                                <i class="fa-solid fa-check-circle"></i> Código de 6 dígitos generado.
+                            </p>
+                        </div>
+
+                        <form id="form-verify-reset-code">
+                            <div class="form-group" style="margin-bottom:14px;">
+                                <label style="font-size:12px; font-weight:600; color:#cbd5e1; margin-bottom:6px; display:block;">Código Recibido (6 Dígitos)</label>
+                                <input type="text" id="reset-code-input" class="form-control" maxlength="6" placeholder="123456" required style="letter-spacing:4px; font-size:18px; text-align:center; font-weight:800; color:#34d399;">
+                            </div>
+                            <div class="form-group" style="margin-bottom:14px;">
+                                <label style="font-size:12px; font-weight:600; color:#cbd5e1; margin-bottom:6px; display:block;">Nueva Contraseña</label>
+                                <input type="password" id="reset-new-pass" class="form-control" placeholder="Mínimo 4 caracteres..." required>
+                            </div>
+                            <div class="form-group" style="margin-bottom:18px;">
+                                <label style="font-size:12px; font-weight:600; color:#cbd5e1; margin-bottom:6px; display:block;">Confirmar Nueva Contraseña</label>
+                                <input type="password" id="reset-confirm-pass" class="form-control" placeholder="Repite la nueva contraseña..." required>
+                            </div>
+                            <button type="submit" id="btn-submit-new-pass" class="btn-primary" style="width:100%; padding:12px; font-size:13.5px; font-weight:700; border-radius:10px;">
+                                <i class="fa-solid fa-lock-check"></i> Actualizar y Entrar
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PASO 0: MIS TORNEOS (AISLADOS POR USUARIO) -->
+        <div id="step-0" class="step">
+            <div class="app-brand-header">
+                <img src="img/ligaapp-logo.png" alt="LigaApp Logo" class="app-brand-logo">
+                <h2 class="app-brand-title"><span class="highlight">Liga</span>App</h2>
+                <div id="user-logged-badge" style="display:inline-flex; align-items:center; gap:8px; background:rgba(16,185,129,0.15); border:1px solid rgba(16,185,129,0.3); padding:4px 12px; border-radius:20px; margin-top:6px;">
+                    <i class="fa-solid fa-circle-user" style="color:#10b981;"></i>
+                    <span id="user-logged-name" style="font-size:12px; font-weight:700; color:#fff;">Usuario</span>
+                    <button type="button" id="btn-logout-portal" title="Cerrar Sesión" style="background:none; border:none; color:#f87171; cursor:pointer; font-size:11px; margin-left:4px;"><i class="fa-solid fa-power-off"></i></button>
+                </div>
             </div>
             <h1>Mis Torneos</h1>
-            <p>Selecciona un torneo para continuar o crea uno nuevo.</p>
+            <p>Aquí aparecen únicamente los torneos que tú has creado.</p>
 
             <div id="tournaments-list" class="cards-wrapper"
                 style="flex-direction:column; gap:15px; margin-bottom:30px;">
-                <!-- Aquí se inyectarán los torneos dinámicamente -->
+                <!-- Aquí se inyectarán los torneos del usuario dinámicamente -->
             </div>
 
-            <button id="btn-create-new" class="btn-primary btn-start"><i class="fa-solid fa-plus"></i> Crear Nuevo
-                Torneo</button>
+            <button id="btn-create-new" class="btn-primary btn-start"><i class="fa-solid fa-plus"></i> Crear Nuevo Torneo</button>
             <p id="limit-msg" style="display:none; color:#EF4444; font-size:13px; margin-top:15px; font-weight:600;"><i
                     class="fa-solid fa-triangle-exclamation"></i> Límite de 2 torneos alcanzado. Elimina uno para crear
                 otro.</p>
+
+            <div style="margin-top:35px; padding-top:20px; border-top:1px solid rgba(255,255,255,0.08);">
+                <button type="button" id="btn-toggle-public-explore" style="background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.1); border-radius:10px; color:#94a3b8; padding:8px 16px; font-size:12.5px; cursor:pointer; font-weight:600;">
+                    <i class="fa-solid fa-globe"></i> Ver Todos los Torneos de la Comunidad
+                </button>
+                <div id="public-tournaments-list" style="display:none; flex-direction:column; gap:10px; margin-top:16px;"></div>
+            </div>
         </div>
 
         <!-- PASO 1: Año y Formato -->
@@ -427,7 +599,9 @@
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="js/db.js?v=6"></script>
-    <script src="js/bienvenida.js?v=3"></script>
+    <script src="js/auth_service.js?v=1"></script>
+    <script src="js/roles.js?v=1"></script>
+    <script src="js/bienvenida.js?v=4"></script>
     <script>
         // PWA Installation Logic
         if ('serviceWorker' in navigator) {
